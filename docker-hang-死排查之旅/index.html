@@ -1,0 +1,1195 @@
+<!DOCTYPE html>
+
+
+
+  
+
+
+<html class="theme-next mist use-motion" lang="zh-Hans">
+<head>
+  <meta charset="UTF-8"/>
+<meta http-equiv="X-UA-Compatible" content="IE=edge" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1"/>
+<meta name="theme-color" content="#222">
+
+
+
+
+
+
+
+
+
+<meta http-equiv="Cache-Control" content="no-transform" />
+<meta http-equiv="Cache-Control" content="no-siteapp" />
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+  
+  <link href="/lib/fancybox/source/jquery.fancybox.css?v=2.1.5" rel="stylesheet" type="text/css" />
+
+
+
+
+
+
+
+<link href="/lib/font-awesome/css/font-awesome.min.css?v=4.6.2" rel="stylesheet" type="text/css" />
+
+<link href="/css/main.css?v=5.1.4" rel="stylesheet" type="text/css" />
+
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png?v=5.1.4">
+
+
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png?v=5.1.4">
+
+
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png?v=5.1.4">
+
+
+  <link rel="mask-icon" href="/images/logo.svg?v=5.1.4" color="#222">
+
+
+
+
+
+  <meta name="keywords" content="docker,containerd,runc," />
+
+
+
+
+
+  <link rel="alternate" href="/atom.xml" title="Stupig" type="application/atom+xml" />
+
+
+
+
+
+
+<meta name="description" content="背景最近，我们在升级kubelet时，发现部分宿主机上docker出现hang死的现象，发现过程详见：docker-hang-死阻塞-kubelet-初始化流程。 现在，我们聚焦在docker上，分析docker hang死问题发生时的现象、形成的原因、问题定位的方法，以及对应的解决办法。本文详细记录了整个过程。 docker hang死我们对docker hang死并不陌生，因为已经发生了好多起">
+<meta property="og:type" content="article">
+<meta property="og:title" content="docker hang 死排查之旅">
+<meta property="og:url" content="https://plpan.github.io/docker-hang-%E6%AD%BB%E6%8E%92%E6%9F%A5%E4%B9%8B%E6%97%85/index.html">
+<meta property="og:site_name" content="Stupig">
+<meta property="og:description" content="背景最近，我们在升级kubelet时，发现部分宿主机上docker出现hang死的现象，发现过程详见：docker-hang-死阻塞-kubelet-初始化流程。 现在，我们聚焦在docker上，分析docker hang死问题发生时的现象、形成的原因、问题定位的方法，以及对应的解决办法。本文详细记录了整个过程。 docker hang死我们对docker hang死并不陌生，因为已经发生了好多起">
+<meta property="og:locale">
+<meta property="article:published_time" content="2020-07-17T08:20:51.000Z">
+<meta property="article:modified_time" content="2020-11-12T01:23:48.061Z">
+<meta property="article:author" content="plpan">
+<meta property="article:tag" content="docker">
+<meta property="article:tag" content="containerd">
+<meta property="article:tag" content="runc">
+<meta name="twitter:card" content="summary">
+
+
+
+<script type="text/javascript" id="hexo.configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    root: '',
+    scheme: 'Mist',
+    version: '5.1.4',
+    sidebar: {"position":"left","display":"always","offset":12,"b2t":false,"scrollpercent":false,"onmobile":false},
+    fancybox: true,
+    tabs: true,
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}},
+    duoshuo: {
+      userId: '0',
+      author: '博主'
+    },
+    algolia: {
+      applicationID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    }
+  };
+</script>
+
+
+
+  <link rel="canonical" href="https://plpan.github.io/docker-hang-死排查之旅/"/>
+
+
+
+
+
+  <title>docker hang 死排查之旅 | Stupig</title>
+  
+
+
+
+
+
+
+
+
+<meta name="generator" content="Hexo 5.2.0"></head>
+
+<body itemscope itemtype="http://schema.org/WebPage" lang="zh-Hans">
+
+  
+  
+    
+  
+
+  <div class="container sidebar-position-left page-post-detail">
+    <div class="headband"></div>
+
+    <header id="header" class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-wrapper">
+  <div class="site-meta ">
+    
+
+    <div class="custom-logo-site-title">
+      <a href="/"  class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">Stupig</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+      
+        <p class="site-subtitle"></p>
+      
+  </div>
+
+  <div class="site-nav-toggle">
+    <button>
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+    </button>
+  </div>
+</div>
+
+<nav class="site-nav">
+  
+
+  
+    <ul id="menu" class="menu">
+      
+        
+        <li class="menu-item menu-item-home">
+          <a href="/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-question-circle"></i> <br />
+            
+            首页
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-archives">
+          <a href="/archives" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-question-circle"></i> <br />
+            
+            归档
+          </a>
+        </li>
+      
+
+      
+        <li class="menu-item menu-item-search">
+          
+            <a href="javascript:;" class="popup-trigger">
+          
+            
+              <i class="menu-item-icon fa fa-search fa-fw"></i> <br />
+            
+            搜索
+          </a>
+        </li>
+      
+    </ul>
+  
+
+  
+    <div class="site-search">
+      
+  <div class="popup search-popup local-search-popup">
+  <div class="local-search-header clearfix">
+    <span class="search-icon">
+      <i class="fa fa-search"></i>
+    </span>
+    <span class="popup-btn-close">
+      <i class="fa fa-times-circle"></i>
+    </span>
+    <div class="local-search-input-wrapper">
+      <input autocomplete="off"
+             placeholder="搜索..." spellcheck="false"
+             type="text" id="local-search-input">
+    </div>
+  </div>
+  <div id="local-search-result"></div>
+</div>
+
+
+
+    </div>
+  
+</nav>
+
+
+
+ </div>
+    </header>
+
+    <main id="main" class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          <div id="content" class="content">
+            
+
+  <div id="posts" class="posts-expand">
+    
+
+  
+
+  
+  
+  
+
+  <article class="post post-type-normal" itemscope itemtype="http://schema.org/Article">
+  
+  
+  
+  <div class="post-block">
+    <link itemprop="mainEntityOfPage" href="https://plpan.github.io/docker-hang-%E6%AD%BB%E6%8E%92%E6%9F%A5%E4%B9%8B%E6%97%85/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="name" content="">
+      <meta itemprop="description" content="">
+      <meta itemprop="image" content="/images/avatar.gif">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Stupig">
+    </span>
+
+    
+      <header class="post-header">
+
+        
+        
+          <h1 class="post-title" itemprop="name headline">docker hang 死排查之旅</h1>
+        
+
+        <div class="post-meta">
+          <span class="post-time">
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">发表于</span>
+              
+              <time title="创建于" itemprop="dateCreated datePublished" datetime="2020-07-17T16:20:51+08:00">
+                2020-07-17
+              </time>
+            
+
+            
+
+            
+          </span>
+
+          
+            <span class="post-category" >
+            
+              <span class="post-meta-divider">|</span>
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">分类于</span>
+              
+              
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/%E9%97%AE%E9%A2%98%E6%8E%92%E6%9F%A5/" itemprop="url" rel="index">
+                    <span itemprop="name">问题排查</span>
+                  </a>
+                </span>
+
+                
+                
+              
+            </span>
+          
+
+          
+            
+          
+
+          
+          
+
+          
+
+          
+
+          
+
+        </div>
+      </header>
+    
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+      
+
+      
+        <h3 id="背景"><a href="#背景" class="headerlink" title="背景"></a>背景</h3><p>最近，我们在升级kubelet时，发现部分宿主机上docker出现hang死的现象，发现过程详见：<a href="https://plpan.github.io/2020/07/18/docker-hang-%E6%AD%BB%E9%98%BB%E5%A1%9E-kubelet-%E5%88%9D%E5%A7%8B%E5%8C%96%E6%B5%81%E7%A8%8B/">docker-hang-死阻塞-kubelet-初始化流程</a>。</p>
+<p>现在，我们聚焦在docker上，分析docker hang死问题发生时的现象、形成的原因、问题定位的方法，以及对应的解决办法。本文详细记录了整个过程。</p>
+<h3 id="docker-hang死"><a href="#docker-hang死" class="headerlink" title="docker hang死"></a>docker hang死</h3><p>我们对docker hang死并不陌生，因为已经发生了好多起。其发生时的现象也多种多样。以往针对docker 1.13.1版本的排查都发现了一些线索，但是并没有定位到根因，最终绝大多数也是通过重启docker解决。而这一次发生在docker 18.06.3版本的docker hang死行为，经过我们4人小分队接近一周的望闻问切，终于确定了其病因。注意，docker hang死的原因远不止一种，因此本排查方法与结果并不具有普适性。</p>
+<p>在开始问题排查之前，我们先整理目前掌握的知识：</p>
+<ul>
+<li>特定容器异常，无法响应docker inspect操作</li>
+</ul>
+<p>除此之外的信息，我们则一无所知。</p>
+<p>当我们排查一个未知的问题时，一般的做法是先找一个切入点，然后顺藤摸瓜，逐步缩小问题排查的圈定范围，并最终在细枝末节上定位问题的所在。而本问题中，docker显然是我们唯一的切入点。</p>
+<h4 id="链路跟踪"><a href="#链路跟踪" class="headerlink" title="链路跟踪"></a>链路跟踪</h4><p>首先，我们希望对docker运行的全局状况有一个大致的了解，熟悉go语言开发的用户自然能联想到调试神器pprof。我们借助pprof描绘出了docker当时运行的蓝图：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br></pre></td><td class="code"><pre><span class="line">goroutine profile: total <span class="number">722373</span></span><br><span class="line"><span class="number">717594</span> @ <span class="number">0x7fe8bc202980</span> <span class="number">0x7fe8bc202a40</span> <span class="number">0x7fe8bc2135d8</span> <span class="number">0x7fe8bc2132ef</span> <span class="number">0x7fe8bc238c1a</span> <span class="number">0x7fe8bd56f7fe</span> <span class="number">0x7fe8bd56f6bd</span> <span class="number">0x7fe8bcea8719</span> <span class="number">0x7fe8bcea938b</span> <span class="number">0x7fe8bcb726ca</span> <span class="number">0x7fe8bcb72b01</span> <span class="number">0x7fe8bc71c26b</span> <span class="number">0x7fe8bcb85f4a</span> <span class="number">0x7fe8bc4b9896</span> <span class="number">0x7fe8bc72a438</span> <span class="number">0x7fe8bcb849e2</span> <span class="number">0x7fe8bc4bc67e</span> <span class="number">0x7fe8bc4b88a3</span> <span class="number">0x7fe8bc230711</span></span><br><span class="line">#	<span class="number">0x7fe8bc2132ee</span>	sync.runtime_SemacquireMutex+<span class="number">0x3e</span>																/usr/local/<span class="keyword">go</span>/src/runtime/sema.<span class="keyword">go</span>:<span class="number">71</span></span><br><span class="line">#	<span class="number">0x7fe8bc238c19</span>	sync.(*Mutex).Lock+<span class="number">0x109</span>																	/usr/local/<span class="keyword">go</span>/src/sync/mutex.<span class="keyword">go</span>:<span class="number">134</span></span><br><span class="line">#	<span class="number">0x7fe8bd56f7fd</span>	github.com/docker/docker/daemon.(*Daemon).ContainerInspectCurrent+<span class="number">0x8d</span>												/root/rpmbuild/BUILD/src/engine/.gopath/src/github.com/docker/docker/daemon/inspect.<span class="keyword">go</span>:<span class="number">40</span></span><br><span class="line">#	<span class="number">0x7fe8bd56f6bc</span>	github.com/docker/docker/daemon.(*Daemon).ContainerInspect+<span class="number">0x11c</span>												/root/rpmbuild/BUILD/src/engine/.gopath/src/github.com/docker/docker/daemon/inspect.<span class="keyword">go</span>:<span class="number">29</span></span><br><span class="line">#	<span class="number">0x7fe8bcea8718</span>	github.com/docker/docker/api/server/router/container.(*containerRouter).getContainersByName+<span class="number">0x118</span>								/root/rpmbuild/BUILD/src/engine/.gopath/src/github.com/docker/docker/api/server/router/container/inspect.<span class="keyword">go</span>:<span class="number">15</span></span><br><span class="line">#	<span class="number">0x7fe8bcea938a</span>	github.com/docker/docker/api/server/router/container.(*containerRouter).(github.com/docker/docker/api/server/router/container.getContainersByName)-fm+<span class="number">0x6a</span>	/root/rpmbuild/BUILD/src/engine/.gopath/src/github.com/docker/docker/api/server/router/container/container.<span class="keyword">go</span>:<span class="number">39</span></span><br><span class="line">#	<span class="number">0x7fe8bcb726c9</span>	github.com/docker/docker/api/server/middleware.ExperimentalMiddleware.WrapHandler.func1+<span class="number">0xd9</span>									/root/rpmbuild/BUILD/src/engine/.gopath/src/github.com/docker/docker/api/server/middleware/experimental.<span class="keyword">go</span>:<span class="number">26</span></span><br><span class="line">#	<span class="number">0x7fe8bcb72b00</span>	github.com/docker/docker/api/server/middleware.VersionMiddleware.WrapHandler.func1+<span class="number">0x400</span>									/root/rpmbuild/BUILD/src/engine/.gopath/src/github.com/docker/docker/api/server/middleware/version.<span class="keyword">go</span>:<span class="number">62</span></span><br><span class="line">#	<span class="number">0x7fe8bc71c26a</span>	github.com/docker/docker/pkg/authorization.(*Middleware).WrapHandler.func1+<span class="number">0x7aa</span>										/root/rpmbuild/BUILD/src/engine/.gopath/src/github.com/docker/docker/pkg/authorization/middleware.<span class="keyword">go</span>:<span class="number">59</span></span><br><span class="line">#	<span class="number">0x7fe8bcb85f49</span>	github.com/docker/docker/api/server.(*Server).makeHTTPHandler.func1+<span class="number">0x199</span>											/root/rpmbuild/BUILD/src/engine/.gopath/src/github.com/docker/docker/api/server/server.<span class="keyword">go</span>:<span class="number">141</span></span><br><span class="line">#	<span class="number">0x7fe8bc4b9895</span>	net/http.HandlerFunc.ServeHTTP+<span class="number">0x45</span>																/usr/local/<span class="keyword">go</span>/src/net/http/server.<span class="keyword">go</span>:<span class="number">1947</span></span><br><span class="line">#	<span class="number">0x7fe8bc72a437</span>	github.com/docker/docker/vendor/github.com/gorilla/mux.(*Router).ServeHTTP+<span class="number">0x227</span>										/root/rpmbuild/BUILD/src/engine/.gopath/src/github.com/docker/docker/vendor/github.com/gorilla/mux/mux.<span class="keyword">go</span>:<span class="number">103</span></span><br><span class="line">#	<span class="number">0x7fe8bcb849e1</span>	github.com/docker/docker/api/server.(*routerSwapper).ServeHTTP+<span class="number">0x71</span>												/root/rpmbuild/BUILD/src/engine/.gopath/src/github.com/docker/docker/api/server/router_swapper.<span class="keyword">go</span>:<span class="number">29</span></span><br><span class="line">#	<span class="number">0x7fe8bc4bc67d</span>	net/http.serverHandler.ServeHTTP+<span class="number">0xbd</span>																/usr/local/<span class="keyword">go</span>/src/net/http/server.<span class="keyword">go</span>:<span class="number">2694</span></span><br><span class="line">#	<span class="number">0x7fe8bc4b88a2</span>	net/http.(*conn).serve+<span class="number">0x652</span>																	/usr/local/<span class="keyword">go</span>/src/net/http/server.<span class="keyword">go</span>:<span class="number">1830</span></span><br><span class="line"></span><br><span class="line"><span class="number">4175</span> @ <span class="number">0x7fe8bc202980</span> <span class="number">0x7fe8bc202a40</span> <span class="number">0x7fe8bc2135d8</span> <span class="number">0x7fe8bc2132ef</span> <span class="number">0x7fe8bc238c1a</span> <span class="number">0x7fe8bcc2eccf</span> <span class="number">0x7fe8bd597af4</span> <span class="number">0x7fe8bcea2456</span> <span class="number">0x7fe8bcea956b</span> <span class="number">0x7fe8bcb73dff</span> <span class="number">0x7fe8bcb726ca</span> <span class="number">0x7fe8bcb72b01</span> <span class="number">0x7fe8bc71c26b</span> <span class="number">0x7fe8bcb85f4a</span> <span class="number">0x7fe8bc4b9896</span> <span class="number">0x7fe8bc72a438</span> <span class="number">0x7fe8bcb849e2</span> <span class="number">0x7fe8bc4bc67e</span> <span class="number">0x7fe8bc4b88a3</span> <span class="number">0x7fe8bc230711</span></span><br><span class="line">#	<span class="number">0x7fe8bc2132ee</span>	sync.runtime_SemacquireMutex+<span class="number">0x3e</span>																/usr/local/<span class="keyword">go</span>/src/runtime/sema.<span class="keyword">go</span>:<span class="number">71</span></span><br><span class="line">#	<span class="number">0x7fe8bc238c19</span>	sync.(*Mutex).Lock+<span class="number">0x109</span>																	/usr/local/<span class="keyword">go</span>/src/sync/mutex.<span class="keyword">go</span>:<span class="number">134</span></span><br><span class="line">#	<span class="number">0x7fe8bcc2ecce</span>	github.com/docker/docker/container.(*State).IsRunning+<span class="number">0x2e</span>													/root/rpmbuild/BUILD/src/engine/.gopath/src/github.com/docker/docker/container/state.<span class="keyword">go</span>:<span class="number">240</span></span><br><span class="line">#	<span class="number">0x7fe8bd597af3</span>	github.com/docker/docker/daemon.(*Daemon).ContainerStats+<span class="number">0xb3</span>													/root/rpmbuild/BUILD/src/engine/.gopath/src/github.com/docker/docker/daemon/stats.<span class="keyword">go</span>:<span class="number">30</span></span><br><span class="line">#	<span class="number">0x7fe8bcea2455</span>	github.com/docker/docker/api/server/router/container.(*containerRouter).getContainersStats+<span class="number">0x1e5</span>								/root/rpmbuild/BUILD/src/engine/.gopath/src/github.com/docker/docker/api/server/router/container/container_routes.<span class="keyword">go</span>:<span class="number">115</span></span><br><span class="line">#	<span class="number">0x7fe8bcea956a</span>	github.com/docker/docker/api/server/router/container.(*containerRouter).(github.com/docker/docker/api/server/router/container.getContainersStats)-fm+<span class="number">0x6a</span>	/root/rpmbuild/BUILD/src/engine/.gopath/src/github.com/docker/docker/api/server/router/container/container.<span class="keyword">go</span>:<span class="number">42</span></span><br><span class="line">#	<span class="number">0x7fe8bcb73dfe</span>	github.com/docker/docker/api/server/router.cancellableHandler.func1+<span class="number">0xce</span>											/root/rpmbuild/BUILD/src/engine/.gopath/src/github.com/docker/docker/api/server/router/local.<span class="keyword">go</span>:<span class="number">92</span></span><br><span class="line">#	<span class="number">0x7fe8bcb726c9</span>	github.com/docker/docker/api/server/middleware.ExperimentalMiddleware.WrapHandler.func1+<span class="number">0xd9</span>									/root/rpmbuild/BUILD/src/engine/.gopath/src/github.com/docker/docker/api/server/middleware/experimental.<span class="keyword">go</span>:<span class="number">26</span></span><br><span class="line">#	<span class="number">0x7fe8bcb72b00</span>	github.com/docker/docker/api/server/middleware.VersionMiddleware.WrapHandler.func1+<span class="number">0x400</span>									/root/rpmbuild/BUILD/src/engine/.gopath/src/github.com/docker/docker/api/server/middleware/version.<span class="keyword">go</span>:<span class="number">62</span></span><br><span class="line">#	<span class="number">0x7fe8bc71c26a</span>	github.com/docker/docker/pkg/authorization.(*Middleware).WrapHandler.func1+<span class="number">0x7aa</span>										/root/rpmbuild/BUILD/src/engine/.gopath/src/github.com/docker/docker/pkg/authorization/middleware.<span class="keyword">go</span>:<span class="number">59</span></span><br><span class="line">#	<span class="number">0x7fe8bcb85f49</span>	github.com/docker/docker/api/server.(*Server).makeHTTPHandler.func1+<span class="number">0x199</span>											/root/rpmbuild/BUILD/src/engine/.gopath/src/github.com/docker/docker/api/server/server.<span class="keyword">go</span>:<span class="number">141</span></span><br><span class="line">#	<span class="number">0x7fe8bc4b9895</span>	net/http.HandlerFunc.ServeHTTP+<span class="number">0x45</span>																/usr/local/<span class="keyword">go</span>/src/net/http/server.<span class="keyword">go</span>:<span class="number">1947</span></span><br><span class="line">#	<span class="number">0x7fe8bc72a437</span>	github.com/docker/docker/vendor/github.com/gorilla/mux.(*Router).ServeHTTP+<span class="number">0x227</span>										/root/rpmbuild/BUILD/src/engine/.gopath/src/github.com/docker/docker/vendor/github.com/gorilla/mux/mux.<span class="keyword">go</span>:<span class="number">103</span></span><br><span class="line">#	<span class="number">0x7fe8bcb849e1</span>	github.com/docker/docker/api/server.(*routerSwapper).ServeHTTP+<span class="number">0x71</span>												/root/rpmbuild/BUILD/src/engine/.gopath/src/github.com/docker/docker/api/server/router_swapper.<span class="keyword">go</span>:<span class="number">29</span></span><br><span class="line">#	<span class="number">0x7fe8bc4bc67d</span>	net/http.serverHandler.ServeHTTP+<span class="number">0xbd</span>																/usr/local/<span class="keyword">go</span>/src/net/http/server.<span class="keyword">go</span>:<span class="number">2694</span></span><br><span class="line">#	<span class="number">0x7fe8bc4b88a2</span>	net/http.(*conn).serve+<span class="number">0x652</span>																	/usr/local/<span class="keyword">go</span>/src/net/http/server.<span class="keyword">go</span>:<span class="number">1830</span></span><br><span class="line"></span><br><span class="line"><span class="number">1</span> @ <span class="number">0x7fe8bc202980</span> <span class="number">0x7fe8bc202a40</span> <span class="number">0x7fe8bc2135d8</span> <span class="number">0x7fe8bc2131fb</span> <span class="number">0x7fe8bc239a3b</span> <span class="number">0x7fe8bcbb679d</span> <span class="number">0x7fe8bcc26774</span> <span class="number">0x7fe8bd570b20</span> <span class="number">0x7fe8bd56f81c</span> <span class="number">0x7fe8bd56f6bd</span> <span class="number">0x7fe8bcea8719</span> <span class="number">0x7fe8bcea938b</span> <span class="number">0x7fe8bcb726ca</span> <span class="number">0x7fe8bcb72b01</span> <span class="number">0x7fe8bc71c26b</span> <span class="number">0x7fe8bcb85f4a</span> <span class="number">0x7fe8bc4b9896</span> <span class="number">0x7fe8bc72a438</span> <span class="number">0x7fe8bcb849e2</span> <span class="number">0x7fe8bc4bc67e</span> <span class="number">0x7fe8bc4b88a3</span> <span class="number">0x7fe8bc230711</span></span><br><span class="line">#	<span class="number">0x7fe8bc2131fa</span>	sync.runtime_Semacquire+<span class="number">0x3a</span>																	/usr/local/<span class="keyword">go</span>/src/runtime/sema.<span class="keyword">go</span>:<span class="number">56</span></span><br><span class="line">#	<span class="number">0x7fe8bc239a3a</span>	sync.(*RWMutex).RLock+<span class="number">0x4a</span>																	/usr/local/<span class="keyword">go</span>/src/sync/rwmutex.<span class="keyword">go</span>:<span class="number">50</span></span><br><span class="line">#	<span class="number">0x7fe8bcbb679c</span>	github.com/docker/docker/daemon/exec.(*Store).List+<span class="number">0x4c</span>														/root/rpmbuild/BUILD/src/engine/.gopath/src/github.com/docker/docker/daemon/exec/exec.<span class="keyword">go</span>:<span class="number">140</span></span><br><span class="line">#	<span class="number">0x7fe8bcc26773</span>	github.com/docker/docker/container.(*Container).GetExecIDs+<span class="number">0x33</span>													/root/rpmbuild/BUILD/src/engine/.gopath/src/github.com/docker/docker/container/container.<span class="keyword">go</span>:<span class="number">423</span></span><br><span class="line">#	<span class="number">0x7fe8bd570b1f</span>	github.com/docker/docker/daemon.(*Daemon).getInspectData+<span class="number">0x5cf</span>													/root/rpmbuild/BUILD/src/engine/.gopath/src/github.com/docker/docker/daemon/inspect.<span class="keyword">go</span>:<span class="number">178</span></span><br><span class="line">#	<span class="number">0x7fe8bd56f81b</span>	github.com/docker/docker/daemon.(*Daemon).ContainerInspectCurrent+<span class="number">0xab</span>												/root/rpmbuild/BUILD/src/engine/.gopath/src/github.com/docker/docker/daemon/inspect.<span class="keyword">go</span>:<span class="number">42</span></span><br><span class="line">#	<span class="number">0x7fe8bd56f6bc</span>	github.com/docker/docker/daemon.(*Daemon).ContainerInspect+<span class="number">0x11c</span>												/root/rpmbuild/BUILD/src/engine/.gopath/src/github.com/docker/docker/daemon/inspect.<span class="keyword">go</span>:<span class="number">29</span></span><br><span class="line">#	<span class="number">0x7fe8bcea8718</span>	github.com/docker/docker/api/server/router/container.(*containerRouter).getContainersByName+<span class="number">0x118</span>								/root/rpmbuild/BUILD/src/engine/.gopath/src/github.com/docker/docker/api/server/router/container/inspect.<span class="keyword">go</span>:<span class="number">15</span></span><br><span class="line">#	<span class="number">0x7fe8bcea938a</span>	github.com/docker/docker/api/server/router/container.(*containerRouter).(github.com/docker/docker/api/server/router/container.getContainersByName)-fm+<span class="number">0x6a</span>	/root/rpmbuild/BUILD/src/engine/.gopath/src/github.com/docker/docker/api/server/router/container/container.<span class="keyword">go</span>:<span class="number">39</span></span><br><span class="line">#	<span class="number">0x7fe8bcb726c9</span>	github.com/docker/docker/api/server/middleware.ExperimentalMiddleware.WrapHandler.func1+<span class="number">0xd9</span>									/root/rpmbuild/BUILD/src/engine/.gopath/src/github.com/docker/docker/api/server/middleware/experimental.<span class="keyword">go</span>:<span class="number">26</span></span><br><span class="line">#	<span class="number">0x7fe8bcb72b00</span>	github.com/docker/docker/api/server/middleware.VersionMiddleware.WrapHandler.func1+<span class="number">0x400</span>									/root/rpmbuild/BUILD/src/engine/.gopath/src/github.com/docker/docker/api/server/middleware/version.<span class="keyword">go</span>:<span class="number">62</span></span><br><span class="line">#	<span class="number">0x7fe8bc71c26a</span>	github.com/docker/docker/pkg/authorization.(*Middleware).WrapHandler.func1+<span class="number">0x7aa</span>										/root/rpmbuild/BUILD/src/engine/.gopath/src/github.com/docker/docker/pkg/authorization/middleware.<span class="keyword">go</span>:<span class="number">59</span></span><br><span class="line">#	<span class="number">0x7fe8bcb85f49</span>	github.com/docker/docker/api/server.(*Server).makeHTTPHandler.func1+<span class="number">0x199</span>											/root/rpmbuild/BUILD/src/engine/.gopath/src/github.com/docker/docker/api/server/server.<span class="keyword">go</span>:<span class="number">141</span></span><br><span class="line">#	<span class="number">0x7fe8bc4b9895</span>	net/http.HandlerFunc.ServeHTTP+<span class="number">0x45</span>																/usr/local/<span class="keyword">go</span>/src/net/http/server.<span class="keyword">go</span>:<span class="number">1947</span></span><br><span class="line">#	<span class="number">0x7fe8bc72a437</span>	github.com/docker/docker/vendor/github.com/gorilla/mux.(*Router).ServeHTTP+<span class="number">0x227</span>										/root/rpmbuild/BUILD/src/engine/.gopath/src/github.com/docker/docker/vendor/github.com/gorilla/mux/mux.<span class="keyword">go</span>:<span class="number">103</span></span><br><span class="line">#	<span class="number">0x7fe8bcb849e1</span>	github.com/docker/docker/api/server.(*routerSwapper).ServeHTTP+<span class="number">0x71</span>												/root/rpmbuild/BUILD/src/engine/.gopath/src/github.com/docker/docker/api/server/router_swapper.<span class="keyword">go</span>:<span class="number">29</span></span><br><span class="line">#	<span class="number">0x7fe8bc4bc67d</span>	net/http.serverHandler.ServeHTTP+<span class="number">0xbd</span>																/usr/local/<span class="keyword">go</span>/src/net/http/server.<span class="keyword">go</span>:<span class="number">2694</span></span><br><span class="line">#	<span class="number">0x7fe8bc4b88a2</span>	net/http.(*conn).serve+<span class="number">0x652</span>																	/usr/local/<span class="keyword">go</span>/src/net/http/server.<span class="keyword">go</span>:<span class="number">1830</span></span><br><span class="line"></span><br><span class="line"><span class="number">1</span> @ <span class="number">0x7fe8bc202980</span> <span class="number">0x7fe8bc212946</span> <span class="number">0x7fe8bc8b6881</span> <span class="number">0x7fe8bc8b699d</span> <span class="number">0x7fe8bc8e259b</span> <span class="number">0x7fe8bc8e1695</span> <span class="number">0x7fe8bc8c47d5</span> <span class="number">0x7fe8bd2e0c06</span> <span class="number">0x7fe8bd2eda96</span> <span class="number">0x7fe8bc8c42fb</span> <span class="number">0x7fe8bc8c4613</span> <span class="number">0x7fe8bd2a6474</span> <span class="number">0x7fe8bd2e6976</span> <span class="number">0x7fe8bd3661c5</span> <span class="number">0x7fe8bd56842f</span> <span class="number">0x7fe8bcea7bdb</span> <span class="number">0x7fe8bcea9f6b</span> <span class="number">0x7fe8bcb726ca</span> <span class="number">0x7fe8bcb72b01</span> <span class="number">0x7fe8bc71c26b</span> <span class="number">0x7fe8bcb85f4a</span> <span class="number">0x7fe8bc4b9896</span> <span class="number">0x7fe8bc72a438</span> <span class="number">0x7fe8bcb849e2</span> <span class="number">0x7fe8bc4bc67e</span> <span class="number">0x7fe8bc4b88a3</span> <span class="number">0x7fe8bc230711</span></span><br><span class="line">#	<span class="number">0x7fe8bc8b6880</span>	github.com/docker/docker/vendor/google.golang.org/grpc/transport.(*Stream).waitOnHeader+<span class="number">0x100</span>											/root/rpmbuild/BUILD/src/engine/.gopath/src/github.com/docker/docker/vendor/google.golang.org/grpc/transport/transport.<span class="keyword">go</span>:<span class="number">222</span></span><br><span class="line">#	<span class="number">0x7fe8bc8b699c</span>	github.com/docker/docker/vendor/google.golang.org/grpc/transport.(*Stream).RecvCompress+<span class="number">0x2c</span>											/root/rpmbuild/BUILD/src/engine/.gopath/src/github.com/docker/docker/vendor/google.golang.org/grpc/transport/transport.<span class="keyword">go</span>:<span class="number">233</span></span><br><span class="line">#	<span class="number">0x7fe8bc8e259a</span>	github.com/docker/docker/vendor/google.golang.org/grpc.(*csAttempt).recvMsg+<span class="number">0x63a</span>												/root/rpmbuild/BUILD/src/engine/.gopath/src/github.com/docker/docker/vendor/google.golang.org/grpc/stream.<span class="keyword">go</span>:<span class="number">515</span></span><br><span class="line">#	<span class="number">0x7fe8bc8e1694</span>	github.com/docker/docker/vendor/google.golang.org/grpc.(*clientStream).RecvMsg+<span class="number">0x44</span>												/root/rpmbuild/BUILD/src/engine/.gopath/src/github.com/docker/docker/vendor/google.golang.org/grpc/stream.<span class="keyword">go</span>:<span class="number">395</span></span><br><span class="line">#	<span class="number">0x7fe8bc8c47d4</span>	github.com/docker/docker/vendor/google.golang.org/grpc.invoke+<span class="number">0x184</span>														/root/rpmbuild/BUILD/src/engine/.gopath/src/github.com/docker/docker/vendor/google.golang.org/grpc/call.<span class="keyword">go</span>:<span class="number">83</span></span><br><span class="line">#	<span class="number">0x7fe8bd2e0c05</span>	github.com/docker/docker/vendor/github.com/containerd/containerd.namespaceInterceptor.unary+<span class="number">0xf5</span>										/root/rpmbuild/BUILD/src/engine/.gopath/src/github.com/docker/docker/vendor/github.com/containerd/containerd/grpc.<span class="keyword">go</span>:<span class="number">35</span></span><br><span class="line">#	<span class="number">0x7fe8bd2eda95</span>	github.com/docker/docker/vendor/github.com/containerd/containerd.(namespaceInterceptor).(github.com/docker/docker/vendor/github.com/containerd/containerd.unary)-fm+<span class="number">0xf5</span>	/root/rpmbuild/BUILD/src/engine/.gopath/src/github.com/docker/docker/vendor/github.com/containerd/containerd/grpc.<span class="keyword">go</span>:<span class="number">51</span></span><br><span class="line">#	<span class="number">0x7fe8bc8c42fa</span>	github.com/docker/docker/vendor/google.golang.org/grpc.(*ClientConn).Invoke+<span class="number">0x10a</span>												/root/rpmbuild/BUILD/src/engine/.gopath/src/github.com/docker/docker/vendor/google.golang.org/grpc/call.<span class="keyword">go</span>:<span class="number">35</span></span><br><span class="line">#	<span class="number">0x7fe8bc8c4612</span>	github.com/docker/docker/vendor/google.golang.org/grpc.Invoke+<span class="number">0xc2</span>														/root/rpmbuild/BUILD/src/engine/.gopath/src/github.com/docker/docker/vendor/google.golang.org/grpc/call.<span class="keyword">go</span>:<span class="number">60</span></span><br><span class="line">#	<span class="number">0x7fe8bd2a6473</span>	github.com/docker/docker/vendor/github.com/containerd/containerd/api/services/tasks/v1.(*tasksClient).Start+<span class="number">0xd3</span>								/root/rpmbuild/BUILD/src/engine/.gopath/src/github.com/docker/docker/vendor/github.com/containerd/containerd/api/services/tasks/v1/tasks.pb.<span class="keyword">go</span>:<span class="number">421</span></span><br><span class="line">#	<span class="number">0x7fe8bd2e6975</span>	github.com/docker/docker/vendor/github.com/containerd/containerd.(*process).Start+<span class="number">0xf5</span>												/root/rpmbuild/BUILD/src/engine/.gopath/src/github.com/docker/docker/vendor/github.com/containerd/containerd/process.<span class="keyword">go</span>:<span class="number">109</span></span><br><span class="line">#	<span class="number">0x7fe8bd3661c4</span>	github.com/docker/docker/libcontainerd.(*client).Exec+<span class="number">0x4b4</span>															/root/rpmbuild/BUILD/src/engine/.gopath/src/github.com/docker/docker/libcontainerd/client_daemon.<span class="keyword">go</span>:<span class="number">381</span></span><br><span class="line">#	<span class="number">0x7fe8bd56842e</span>	github.com/docker/docker/daemon.(*Daemon).ContainerExecStart+<span class="number">0xb4e</span>														/root/rpmbuild/BUILD/src/engine/.gopath/src/github.com/docker/docker/daemon/exec.<span class="keyword">go</span>:<span class="number">251</span></span><br><span class="line">#	<span class="number">0x7fe8bcea7bda</span>	github.com/docker/docker/api/server/router/container.(*containerRouter).postContainerExecStart+<span class="number">0x34a</span>										/root/rpmbuild/BUILD/src/engine/.gopath/src/github.com/docker/docker/api/server/router/container/exec.<span class="keyword">go</span>:<span class="number">125</span></span><br><span class="line">#	<span class="number">0x7fe8bcea9f6a</span>	github.com/docker/docker/api/server/router/container.(*containerRouter).(github.com/docker/docker/api/server/router/container.postContainerExecStart)-fm+<span class="number">0x6a</span>			/root/rpmbuild/BUILD/src/engine/.gopath/src/github.com/docker/docker/api/server/router/container/container.<span class="keyword">go</span>:<span class="number">59</span></span><br><span class="line">#	<span class="number">0x7fe8bcb726c9</span>	github.com/docker/docker/api/server/middleware.ExperimentalMiddleware.WrapHandler.func1+<span class="number">0xd9</span>											/root/rpmbuild/BUILD/src/engine/.gopath/src/github.com/docker/docker/api/server/middleware/experimental.<span class="keyword">go</span>:<span class="number">26</span></span><br><span class="line">#	<span class="number">0x7fe8bcb72b00</span>	github.com/docker/docker/api/server/middleware.VersionMiddleware.WrapHandler.func1+<span class="number">0x400</span>											/root/rpmbuild/BUILD/src/engine/.gopath/src/github.com/docker/docker/api/server/middleware/version.<span class="keyword">go</span>:<span class="number">62</span></span><br><span class="line">#	<span class="number">0x7fe8bc71c26a</span>	github.com/docker/docker/pkg/authorization.(*Middleware).WrapHandler.func1+<span class="number">0x7aa</span>												/root/rpmbuild/BUILD/src/engine/.gopath/src/github.com/docker/docker/pkg/authorization/middleware.<span class="keyword">go</span>:<span class="number">59</span></span><br><span class="line">#	<span class="number">0x7fe8bcb85f49</span>	github.com/docker/docker/api/server.(*Server).makeHTTPHandler.func1+<span class="number">0x199</span>													/root/rpmbuild/BUILD/src/engine/.gopath/src/github.com/docker/docker/api/server/server.<span class="keyword">go</span>:<span class="number">141</span></span><br><span class="line">#	<span class="number">0x7fe8bc4b9895</span>	net/http.HandlerFunc.ServeHTTP+<span class="number">0x45</span>																		/usr/local/<span class="keyword">go</span>/src/net/http/server.<span class="keyword">go</span>:<span class="number">1947</span></span><br><span class="line">#	<span class="number">0x7fe8bc72a437</span>	github.com/docker/docker/vendor/github.com/gorilla/mux.(*Router).ServeHTTP+<span class="number">0x227</span>												/root/rpmbuild/BUILD/src/engine/.gopath/src/github.com/docker/docker/vendor/github.com/gorilla/mux/mux.<span class="keyword">go</span>:<span class="number">103</span></span><br><span class="line">#	<span class="number">0x7fe8bcb849e1</span>	github.com/docker/docker/api/server.(*routerSwapper).ServeHTTP+<span class="number">0x71</span>														/root/rpmbuild/BUILD/src/engine/.gopath/src/github.com/docker/docker/api/server/router_swapper.<span class="keyword">go</span>:<span class="number">29</span></span><br><span class="line">#	<span class="number">0x7fe8bc4bc67d</span>	net/http.serverHandler.ServeHTTP+<span class="number">0xbd</span>																		/usr/local/<span class="keyword">go</span>/src/net/http/server.<span class="keyword">go</span>:<span class="number">2694</span></span><br><span class="line">#	<span class="number">0x7fe8bc4b88a2</span>	net/http.(*conn).serve+<span class="number">0x652</span>																			/usr/local/<span class="keyword">go</span>/src/net/http/server.<span class="keyword">go</span>:<span class="number">1830</span></span><br></pre></td></tr></table></figure>
+
+<p>注意，这是一份精简后的docker协程栈信息。从上面的蓝图，我们可以总结出如下结论：</p>
+<ul>
+<li>有 717594 个协程被阻塞在docker inspect</li>
+<li>有 4175 个协程被阻塞在docker stats</li>
+<li>有 1 个协程被阻塞在获取 docker exec的任务ID</li>
+<li>有 1 个协程被阻塞在docker exec的执行过程</li>
+</ul>
+<p>从上面的结论，我们基本了解了异常容器hang死的原因：在于该容器执行docker exec (4)后未返回，进而导致获取docker exec的任务ID (3)阻塞，由于(3)获取了容器锁，进而导致了docker inspect (1)与docker stats (2)卡死。所以病因并非是docker inspect，而是docker exec。</p>
+<p>要想继续往下挖掘，我们现在有必要补充一下背景知识。kubelet启动容器或者在容器内执行命令的完整调用路径如下：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><span class="line">+--------------------------------------------------------------+</span><br><span class="line">|                                                              |</span><br><span class="line">|   +------------+                                             |</span><br><span class="line">|   |            |                                             |</span><br><span class="line">|   |   kubelet  |                                             |</span><br><span class="line">|   |            |                                             |</span><br><span class="line">|   +------|-----+                                             |</span><br><span class="line">|          |                                                   |</span><br><span class="line">|          |                                                   |</span><br><span class="line">|   +------v-----+       +---------------+                     |</span><br><span class="line">|   |            |       |               |                     |</span><br><span class="line">|   |   dockerd  -------&gt;|  containerd   |                     |</span><br><span class="line">|   |            |       |               |                     |</span><br><span class="line">|   +------------+       +-------|-------+                     |</span><br><span class="line">|                                |                             |</span><br><span class="line">|                                |                             |</span><br><span class="line">|                        +-------v-------+     +-----------+   |</span><br><span class="line">|                        |               |     |           |   |</span><br><span class="line">|                        |containerd-shim-----&gt;|   runc    |   |</span><br><span class="line">|                        |               |     |           |   |</span><br><span class="line">|                        +---------------+     +-----------+   |</span><br><span class="line">|                                                              |</span><br><span class="line">+--------------------------------------------------------------+</span><br></pre></td></tr></table></figure>
+
+<p>dockerd与containerd可以当做两层nginx代理，containerd-shim是容器的监护人，而runc则是容器启动与命令执行的真正工具人。runc干的事情也非常简单：按照用户指定的配置创建NS，或者进入特定NS，然后执行用户命令。说白了，创建容器就是新建NS，然后在该NS内执行用户指定的命令。</p>
+<p>按照上面介绍的背景知识，我们继续往下探索containerd。幸运的是，借助pprof，我们也可以描绘出containerd此时的运行蓝图：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line">goroutine profile: total <span class="number">430</span></span><br><span class="line"><span class="number">1</span> @ <span class="number">0x7f6e55f82740</span> <span class="number">0x7f6e55f92616</span> <span class="number">0x7f6e56a8412c</span> <span class="number">0x7f6e56a83d6d</span> <span class="number">0x7f6e56a911bf</span> <span class="number">0x7f6e56ac6e3b</span> <span class="number">0x7f6e565093de</span> <span class="number">0x7f6e5650dd3b</span> <span class="number">0x7f6e5650392b</span> <span class="number">0x7f6e56b51216</span> <span class="number">0x7f6e564e5909</span> <span class="number">0x7f6e563ec76a</span> <span class="number">0x7f6e563f000a</span> <span class="number">0x7f6e563f6791</span> <span class="number">0x7f6e55fb0151</span></span><br><span class="line">#	<span class="number">0x7f6e56a8412b</span>	github.com/containerd/containerd/vendor/github.com/stevvooe/ttrpc.(*Client).dispatch+<span class="number">0x24b</span>				/<span class="keyword">go</span>/src/github.com/containerd/containerd/vendor/github.com/stevvooe/ttrpc/client.<span class="keyword">go</span>:<span class="number">102</span></span><br><span class="line">#	<span class="number">0x7f6e56a83d6c</span>	github.com/containerd/containerd/vendor/github.com/stevvooe/ttrpc.(*Client).Call+<span class="number">0x15c</span>					/<span class="keyword">go</span>/src/github.com/containerd/containerd/vendor/github.com/stevvooe/ttrpc/client.<span class="keyword">go</span>:<span class="number">73</span></span><br><span class="line">#	<span class="number">0x7f6e56a911be</span>	github.com/containerd/containerd/linux/shim/v1.(*shimClient).Start+<span class="number">0xbe</span>							/<span class="keyword">go</span>/src/github.com/containerd/containerd/linux/shim/v1/shim.pb.<span class="keyword">go</span>:<span class="number">1745</span></span><br><span class="line">#	<span class="number">0x7f6e56ac6e3a</span>	github.com/containerd/containerd/linux.(*Process).Start+<span class="number">0x8a</span>								/<span class="keyword">go</span>/src/github.com/containerd/containerd/linux/process.<span class="keyword">go</span>:<span class="number">125</span></span><br><span class="line">#	<span class="number">0x7f6e565093dd</span>	github.com/containerd/containerd/services/tasks.(*local).Start+<span class="number">0x14d</span>							/<span class="keyword">go</span>/src/github.com/containerd/containerd/services/tasks/local.<span class="keyword">go</span>:<span class="number">187</span></span><br><span class="line">#	<span class="number">0x7f6e5650dd3a</span>	github.com/containerd/containerd/services/tasks.(*service).Start+<span class="number">0x6a</span>							/<span class="keyword">go</span>/src/github.com/containerd/containerd/services/tasks/service.<span class="keyword">go</span>:<span class="number">72</span></span><br><span class="line">#	<span class="number">0x7f6e5650392a</span>	github.com/containerd/containerd/api/services/tasks/v1._Tasks_Start_Handler.func1+<span class="number">0x8a</span>					/<span class="keyword">go</span>/src/github.com/containerd/containerd/api/services/tasks/v1/tasks.pb.<span class="keyword">go</span>:<span class="number">624</span></span><br><span class="line">#	<span class="number">0x7f6e56b51215</span>	github.com/containerd/containerd/vendor/github.com/grpc-ecosystem/<span class="keyword">go</span>-grpc-prometheus.UnaryServerInterceptor+<span class="number">0xa5</span>	/<span class="keyword">go</span>/src/github.com/containerd/containerd/vendor/github.com/grpc-ecosystem/<span class="keyword">go</span>-grpc-prometheus/server.<span class="keyword">go</span>:<span class="number">29</span></span><br><span class="line">#	<span class="number">0x7f6e564e5908</span>	github.com/containerd/containerd/api/services/tasks/v1._Tasks_Start_Handler+<span class="number">0x168</span>					/<span class="keyword">go</span>/src/github.com/containerd/containerd/api/services/tasks/v1/tasks.pb.<span class="keyword">go</span>:<span class="number">626</span></span><br><span class="line">#	<span class="number">0x7f6e563ec769</span>	github.com/containerd/containerd/vendor/google.golang.org/grpc.(*Server).processUnaryRPC+<span class="number">0x849</span>				/<span class="keyword">go</span>/src/github.com/containerd/containerd/vendor/google.golang.org/grpc/server.<span class="keyword">go</span>:<span class="number">920</span></span><br><span class="line">#	<span class="number">0x7f6e563f0009</span>	github.com/containerd/containerd/vendor/google.golang.org/grpc.(*Server).handleStream+<span class="number">0x1319</span>				/<span class="keyword">go</span>/src/github.com/containerd/containerd/vendor/google.golang.org/grpc/server.<span class="keyword">go</span>:<span class="number">1142</span></span><br><span class="line">#	<span class="number">0x7f6e563f6790</span>	github.com/containerd/containerd/vendor/google.golang.org/grpc.(*Server).serveStreams.func1<span class="number">.1</span>+<span class="number">0xa0</span>			/<span class="keyword">go</span>/src/github.com/containerd/containerd/vendor/google.golang.org/grpc/server.<span class="keyword">go</span>:<span class="number">637</span></span><br></pre></td></tr></table></figure>
+
+<p>同样，我们仅保留了关键的协程信息，从上面的协程栈可以看出，containerd阻塞在接收exec返回结果处，附上关键代码佐证：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(c *Client)</span> <span class="title">dispatch</span><span class="params">(ctx context.Context, req *Request, resp *Response)</span> <span class="title">error</span></span> &#123;</span><br><span class="line">   errs := <span class="built_in">make</span>(<span class="keyword">chan</span> error, <span class="number">1</span>)</span><br><span class="line">   call := &amp;callRequest&#123;</span><br><span class="line">      req:  req,</span><br><span class="line">      resp: resp,</span><br><span class="line">      errs: errs,</span><br><span class="line">   &#125;</span><br><span class="line"></span><br><span class="line">   <span class="keyword">select</span> &#123;</span><br><span class="line">   <span class="keyword">case</span> c.calls &lt;- call:</span><br><span class="line">   <span class="keyword">case</span> &lt;-c.done:</span><br><span class="line">      <span class="keyword">return</span> c.err</span><br><span class="line">   &#125;</span><br><span class="line"></span><br><span class="line">   <span class="keyword">select</span> &#123;        <span class="comment">// 此处对应上面协程栈 /go/src/github.com/containerd/containerd/vendor/github.com/stevvooe/ttrpc/client.go:102</span></span><br><span class="line">   <span class="keyword">case</span> err := &lt;-errs:</span><br><span class="line">      <span class="keyword">return</span> filterCloseErr(err)</span><br><span class="line">   <span class="keyword">case</span> &lt;-c.done:</span><br><span class="line">      <span class="keyword">return</span> c.err</span><br><span class="line">   &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>containerd将请求传递至containerd-shim之后，一直在等待containerd-shim的返回。</p>
+<p>正常情况下，如果我们能够按照调用链路逐个分析每个组件的协程调用栈信息，我们能够很快的定位问题所在。不幸的是，由于线上docker没有开启debug模式，我们无法收集containerd-shim的pprof信息，并且runc也没有开启pprof。因此单纯依赖协程调用链路定位问题这条路被堵死了。</p>
+<p>截至目前，我们已经收集了部分关键信息，同时也将问题排查范围更进一步地缩小在containerd-shim与runc之间。接下来我们换一种思路继续排查。</p>
+<h4 id="进程排查"><a href="#进程排查" class="headerlink" title="进程排查"></a>进程排查</h4><p>当组件的运行状态无法继续获取时，我们转换一下思维，获取容器的运行状态，也即异常容器此时的进程状态。</p>
+<p>既然docker ps执行正常，而docker inspect hang死，首先我们定位异常容器，命令如下：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">docker ps | grep -v NAME | awk <span class="string">&#x27;&#123;print $1&#125;&#x27;</span> | while read cid; do echo $cid; docker inspect -f &#123;&#123;.State.Pid&#125;&#125; $cid; done</span><br></pre></td></tr></table></figure>
+
+<p>拿到异常容器的ID之后，我们就能扫描与该容器相关的所有进程：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">UID      PID    PPID  C STIME TTY          TIME CMD</span><br><span class="line">root     <span class="number">11646</span>  <span class="number">6655</span>  <span class="number">0</span> Jun17 ?        <span class="number">00</span>:<span class="number">01</span>:<span class="number">04</span> docker-containerd-shim -namespace moby -workdir /home/docker_rt/containerd/daemon/io.containerd.runtime.v1.linux/moby/bbd5e4b5f9c13666dd0ec7ff7afb2c4c2b0ede40a4adf1de43cc31c606f283f5 -address /<span class="keyword">var</span>/run/docker/containerd/docker-containerd.sock -containerd-binary /usr/bin/docker-containerd -runtime-root /<span class="keyword">var</span>/run/docker/runtime-runc</span><br><span class="line">root     <span class="number">11680</span> <span class="number">11646</span>  <span class="number">0</span> Jun17 ?        <span class="number">00</span>:<span class="number">00</span>:<span class="number">00</span> /dockerinit</span><br><span class="line">root     <span class="number">15581</span> <span class="number">11646</span>  <span class="number">0</span> Jun17 ?        <span class="number">00</span>:<span class="number">00</span>:<span class="number">00</span> docker-runc --root /<span class="keyword">var</span>/run/docker/runtime-runc/moby --log /run/docker/containerd/daemon/io.containerd.runtime.v1.linux/moby/bbd5e4b5f9c13666dd0ec7ff7afb2c4c2b0ede40a4adf1de43cc31c606f283f5/log.json --log-format json exec --process /tmp/runc-process616674997 --detach --pid-file /run/docker/containerd/daemon/io.containerd.runtime.v1.linux/moby/bbd5e4b5f9c13666dd0ec7ff7afb2c4c2b0ede40a4adf1de43cc31c606f283f5/<span class="number">0594</span>c5897a41d401e4d1d7ddd44dacdd316c7e7d53bfdae7f16b0f6b26fcbcda.pid bbd5e4b5f9c13666dd0ec7ff7afb2c4c2b0ede40a4adf1de43cc31c606f283f5</span><br><span class="line">root     <span class="number">15638</span> <span class="number">15581</span>  <span class="number">0</span> Jun17 ?        <span class="number">00</span>:<span class="number">00</span>:<span class="number">00</span> docker-runc init</span><br></pre></td></tr></table></figure>
+
+<p>核心进程列表如上，简单备注下：</p>
+<ul>
+<li>6655：containerd进程</li>
+<li>11646：异常容器的containerd-shim进程</li>
+<li>11680：异常容器的容器启动进程。在容器内查看，因PID NS的隔离，该进程ID是1</li>
+<li>15581：在异常容器内执行用户命令的进程，此时还未进入容器内部</li>
+<li>15638：在异常容器内执行用户命令时，进入容器NS的进程</li>
+</ul>
+<p>这里再补充一个背景知识：当我们启动容器时，首先会创建runc init进程，创建并进入新的容器NS；而当我们在容器内执行命令时，首先也会创建runc init进程，进入容器的NS。只有在进入容器的隔离NS之后，才会执行用户指定的命令。</p>
+<p>面对上面的进程列表，我们无法直观地分辨问题究竟由哪个进程引起。因此，我们还需要了解进程当前所处的状态。借助strace，我们逐一展示进程的活动状态：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 11646 (container-shim)</span></span><br><span class="line">Process <span class="number">11646</span> attached with <span class="number">10</span> threads</span><br><span class="line">[pid <span class="number">37342</span>] epoll_pwait(<span class="number">5</span>,  &lt;unfinished ...&gt;</span><br><span class="line">[pid <span class="number">11656</span>] futex(<span class="number">0x818cc0</span>, FUTEX_WAIT, <span class="number">0</span>, NULL &lt;unfinished ...&gt;</span><br><span class="line">[pid <span class="number">11655</span>] restart_syscall(&lt;... resuming interrupted call ...&gt; &lt;unfinished ...&gt;</span><br><span class="line">[pid <span class="number">11654</span>] futex(<span class="number">0x818bd8</span>, FUTEX_WAIT, <span class="number">0</span>, NULL &lt;unfinished ...&gt;</span><br><span class="line">[pid <span class="number">11653</span>] futex(<span class="number">0x7fc730</span>, FUTEX_WAKE, <span class="number">1</span> &lt;unfinished ...&gt;</span><br><span class="line">[pid <span class="number">11651</span>] futex(<span class="number">0xc4200b4148</span>, FUTEX_WAIT, <span class="number">0</span>, NULL &lt;unfinished ...&gt;</span><br><span class="line">[pid <span class="number">11650</span>] futex(<span class="number">0xc420082948</span>, FUTEX_WAIT, <span class="number">0</span>, NULL &lt;unfinished ...&gt;</span><br><span class="line">[pid <span class="number">11649</span>] futex(<span class="number">0xc420082548</span>, FUTEX_WAIT, <span class="number">0</span>, NULL &lt;unfinished ...&gt;</span><br><span class="line">[pid <span class="number">11647</span>] restart_syscall(&lt;... resuming interrupted call ...&gt; &lt;unfinished ...&gt;</span><br><span class="line">[pid <span class="number">11646</span>] futex(<span class="number">0x7fd008</span>, FUTEX_WAIT, <span class="number">0</span>, NULL &lt;unfinished ...&gt;</span><br><span class="line">[pid <span class="number">11653</span>] &lt;... futex resumed&gt; )       = <span class="number">0</span></span><br><span class="line">[pid <span class="number">11647</span>] &lt;... restart_syscall resumed&gt; ) = <span class="number">-1</span> EAGAIN (Resource temporarily unavailable)</span><br><span class="line">[pid <span class="number">11653</span>] epoll_wait(<span class="number">4</span>,  &lt;unfinished ...&gt;</span><br><span class="line">[pid <span class="number">11647</span>] pselect6(<span class="number">0</span>, NULL, NULL, NULL, &#123;<span class="number">0</span>, <span class="number">20000</span>&#125;, <span class="number">0</span>) = <span class="number">0</span> (Timeout)</span><br><span class="line">[pid <span class="number">11647</span>] futex(<span class="number">0x7fc730</span>, FUTEX_WAIT, <span class="number">0</span>, &#123;<span class="number">60</span>, <span class="number">0</span>&#125;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="comment">// 11581 (runc exec)</span></span><br><span class="line">Process <span class="number">15581</span> attached with <span class="number">7</span> threads</span><br><span class="line">[pid <span class="number">15619</span>] read(<span class="number">6</span>,  &lt;unfinished ...&gt;</span><br><span class="line">[pid <span class="number">15592</span>] futex(<span class="number">0xc4200be148</span>, FUTEX_WAIT, <span class="number">0</span>, NULL &lt;unfinished ...&gt;</span><br><span class="line">[pid <span class="number">15591</span>] futex(<span class="number">0x7fd6d25f6238</span>, FUTEX_WAIT, <span class="number">0</span>, NULL &lt;unfinished ...&gt;</span><br><span class="line">[pid <span class="number">15590</span>] futex(<span class="number">0xc420084d48</span>, FUTEX_WAIT, <span class="number">0</span>, NULL &lt;unfinished ...&gt;</span><br><span class="line">[pid <span class="number">15586</span>] futex(<span class="number">0x7fd6d25f6320</span>, FUTEX_WAIT, <span class="number">0</span>, NULL &lt;unfinished ...&gt;</span><br><span class="line">[pid <span class="number">15584</span>] restart_syscall(&lt;... resuming interrupted call ...&gt; &lt;unfinished ...&gt;</span><br><span class="line">[pid <span class="number">15581</span>] futex(<span class="number">0x7fd6d25d9b28</span>, FUTEX_WAIT, <span class="number">0</span>, NULL</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="comment">// 11638 (runc init)</span></span><br><span class="line">Process <span class="number">15638</span> attached with <span class="number">7</span> threads</span><br><span class="line">[pid <span class="number">15648</span>] futex(<span class="number">0x7f512cea5320</span>, FUTEX_WAIT, <span class="number">0</span>, NULL &lt;unfinished ...&gt;</span><br><span class="line">[pid <span class="number">15647</span>] futex(<span class="number">0x7f512cea5238</span>, FUTEX_WAIT, <span class="number">0</span>, NULL &lt;unfinished ...&gt;</span><br><span class="line">[pid <span class="number">15645</span>] futex(<span class="number">0xc4200bc148</span>, FUTEX_WAIT, <span class="number">0</span>, NULL &lt;unfinished ...&gt;</span><br><span class="line">[pid <span class="number">15643</span>] futex(<span class="number">0xc420082d48</span>, FUTEX_WAIT, <span class="number">0</span>, NULL &lt;unfinished ...&gt;</span><br><span class="line">[pid <span class="number">15642</span>] futex(<span class="number">0xc420082948</span>, FUTEX_WAIT, <span class="number">0</span>, NULL &lt;unfinished ...&gt;</span><br><span class="line">[pid <span class="number">15639</span>] restart_syscall(&lt;... resuming interrupted call ...&gt; &lt;unfinished ...&gt;</span><br><span class="line">[pid <span class="number">15638</span>] write(<span class="number">2</span>, <span class="string">&quot;/usr/local/go/src/runtime/proc.g&quot;</span>..., <span class="number">33</span></span><br></pre></td></tr></table></figure>
+
+<p>从关联进程的活动状态，我们可以得出如下结论：</p>
+<ul>
+<li>runc exec在等待从6号FD读取数据</li>
+<li>runc init在等待从2号FD写入数据</li>
+</ul>
+<p>这些FD究竟对应的是什么文件呢？我们借助lsof可以查看：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 11638 (runc init)</span></span><br><span class="line">COMMAND     PID USER   FD      TYPE             DEVICE SIZE/OFF       NODE NAME</span><br><span class="line">runc:[<span class="number">2</span>:I <span class="number">15638</span> root  cwd       DIR               <span class="number">0</span>,<span class="number">41</span>      <span class="number">192</span> <span class="number">1066743071</span> /</span><br><span class="line">runc:[<span class="number">2</span>:I <span class="number">15638</span> root  rtd       DIR               <span class="number">0</span>,<span class="number">41</span>      <span class="number">192</span> <span class="number">1066743071</span> /</span><br><span class="line">runc:[<span class="number">2</span>:I <span class="number">15638</span> root  txt       REG                <span class="number">0</span>,<span class="number">4</span>  <span class="number">7644224</span> <span class="number">1070360467</span> /memfd:runc_cloned:/proc/self/exe (deleted)</span><br><span class="line">runc:[<span class="number">2</span>:I <span class="number">15638</span> root  mem       REG                <span class="number">8</span>,<span class="number">3</span>  <span class="number">2107816</span>    <span class="number">1053962</span> /usr/lib64/libc<span class="number">-2.17</span>.so</span><br><span class="line">runc:[<span class="number">2</span>:I <span class="number">15638</span> root  mem       REG                <span class="number">8</span>,<span class="number">3</span>    <span class="number">19512</span>    <span class="number">1054285</span> /usr/lib64/libdl<span class="number">-2.17</span>.so</span><br><span class="line">runc:[<span class="number">2</span>:I <span class="number">15638</span> root  mem       REG                <span class="number">8</span>,<span class="number">3</span>   <span class="number">266688</span>    <span class="number">1050626</span> /usr/lib64/libseccomp.so<span class="number">.2</span><span class="number">.3</span><span class="number">.1</span></span><br><span class="line">runc:[<span class="number">2</span>:I <span class="number">15638</span> root  mem       REG                <span class="number">8</span>,<span class="number">3</span>   <span class="number">142296</span>    <span class="number">1055698</span> /usr/lib64/libpthread<span class="number">-2.17</span>.so</span><br><span class="line">runc:[<span class="number">2</span>:I <span class="number">15638</span> root  mem       REG                <span class="number">8</span>,<span class="number">3</span>    <span class="number">27168</span>    <span class="number">3024893</span> /usr/local/gundam/gundam_client/preload/lib64/gundam_preload.so</span><br><span class="line">runc:[<span class="number">2</span>:I <span class="number">15638</span> root  mem       REG                <span class="number">8</span>,<span class="number">3</span>   <span class="number">164432</span>    <span class="number">1054515</span> /usr/lib64/ld<span class="number">-2.17</span>.so</span><br><span class="line">runc:[<span class="number">2</span>:I <span class="number">15638</span> root    <span class="number">0</span>r     FIFO                <span class="number">0</span>,<span class="number">8</span>      <span class="number">0</span>t0 <span class="number">1070361745</span> pipe</span><br><span class="line">runc:[<span class="number">2</span>:I <span class="number">15638</span> root    <span class="number">1</span>w     FIFO                <span class="number">0</span>,<span class="number">8</span>      <span class="number">0</span>t0 <span class="number">1070361746</span> pipe</span><br><span class="line">runc:[<span class="number">2</span>:I <span class="number">15638</span> root    <span class="number">2</span>w     FIFO                <span class="number">0</span>,<span class="number">8</span>      <span class="number">0</span>t0 <span class="number">1070361747</span> pipe</span><br><span class="line">runc:[<span class="number">2</span>:I <span class="number">15638</span> root    <span class="number">3</span>u     unix <span class="number">0xffff881ff8273000</span>      <span class="number">0</span>t0 <span class="number">1070361341</span> socket</span><br><span class="line">runc:[<span class="number">2</span>:I <span class="number">15638</span> root    <span class="number">5</span>u  a_inode                <span class="number">0</span>,<span class="number">9</span>        <span class="number">0</span>       <span class="number">7180</span> [eventpoll]</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="comment">// 11581 (runc exec)</span></span><br><span class="line">COMMAND     PID USER   FD      TYPE             DEVICE SIZE/OFF       NODE NAME</span><br><span class="line">docker-ru <span class="number">15581</span> root  cwd       DIR               <span class="number">0</span>,<span class="number">18</span>      <span class="number">120</span> <span class="number">1066743076</span> /run/docker/containerd/daemon/io.containerd.runtime.v1.linux/moby/bbd5e4b5f9c13666dd0ec7ff7afb2c4c2b0ede40a4adf1de43cc31c606f283f5</span><br><span class="line">docker-ru <span class="number">15581</span> root  rtd       DIR                <span class="number">8</span>,<span class="number">3</span>     <span class="number">4096</span>          <span class="number">2</span> /</span><br><span class="line">docker-ru <span class="number">15581</span> root  txt       REG                <span class="number">8</span>,<span class="number">3</span>  <span class="number">7644224</span>     <span class="number">919775</span> /usr/bin/docker-runc</span><br><span class="line">docker-ru <span class="number">15581</span> root  mem       REG                <span class="number">8</span>,<span class="number">3</span>  <span class="number">2107816</span>    <span class="number">1053962</span> /usr/lib64/libc<span class="number">-2.17</span>.so</span><br><span class="line">docker-ru <span class="number">15581</span> root  mem       REG                <span class="number">8</span>,<span class="number">3</span>    <span class="number">19512</span>    <span class="number">1054285</span> /usr/lib64/libdl<span class="number">-2.17</span>.so</span><br><span class="line">docker-ru <span class="number">15581</span> root  mem       REG                <span class="number">8</span>,<span class="number">3</span>   <span class="number">266688</span>    <span class="number">1050626</span> /usr/lib64/libseccomp.so<span class="number">.2</span><span class="number">.3</span><span class="number">.1</span></span><br><span class="line">docker-ru <span class="number">15581</span> root  mem       REG                <span class="number">8</span>,<span class="number">3</span>   <span class="number">142296</span>    <span class="number">1055698</span> /usr/lib64/libpthread<span class="number">-2.17</span>.so</span><br><span class="line">docker-ru <span class="number">15581</span> root  mem       REG                <span class="number">8</span>,<span class="number">3</span>    <span class="number">27168</span>    <span class="number">3024893</span> /usr/local/gundam/gundam_client/preload/lib64/gundam_preload.so</span><br><span class="line">docker-ru <span class="number">15581</span> root  mem       REG                <span class="number">8</span>,<span class="number">3</span>   <span class="number">164432</span>    <span class="number">1054515</span> /usr/lib64/ld<span class="number">-2.17</span>.so</span><br><span class="line">docker-ru <span class="number">15581</span> root    <span class="number">0</span>r     FIFO                <span class="number">0</span>,<span class="number">8</span>      <span class="number">0</span>t0 <span class="number">1070361745</span> pipe</span><br><span class="line">docker-ru <span class="number">15581</span> root    <span class="number">1</span>w     FIFO                <span class="number">0</span>,<span class="number">8</span>      <span class="number">0</span>t0 <span class="number">1070361746</span> pipe</span><br><span class="line">docker-ru <span class="number">15581</span> root    <span class="number">2</span>w     FIFO                <span class="number">0</span>,<span class="number">8</span>      <span class="number">0</span>t0 <span class="number">1070361747</span> pipe</span><br><span class="line">docker-ru <span class="number">15581</span> root    <span class="number">3</span>w      REG               <span class="number">0</span>,<span class="number">18</span>     <span class="number">5456</span> <span class="number">1066709902</span> /run/docker/containerd/daemon/io.containerd.runtime.v1.linux/moby/bbd5e4b5f9c13666dd0ec7ff7afb2c4c2b0ede40a4adf1de43cc31c606f283f5/log.json</span><br><span class="line">docker-ru <span class="number">15581</span> root    <span class="number">4</span>u  a_inode                <span class="number">0</span>,<span class="number">9</span>        <span class="number">0</span>       <span class="number">7180</span> [eventpoll]</span><br><span class="line">docker-ru <span class="number">15581</span> root    <span class="number">6</span>u     unix <span class="number">0xffff881ff8275400</span>      <span class="number">0</span>t0 <span class="number">1070361342</span> socket</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="comment">// 11646 (container-shim)</span></span><br><span class="line">COMMAND     PID USER   FD      TYPE             DEVICE SIZE/OFF       NODE NAME</span><br><span class="line">docker-co <span class="number">11646</span> root  cwd       DIR               <span class="number">0</span>,<span class="number">18</span>      <span class="number">120</span> <span class="number">1066743076</span> /run/docker/containerd/daemon/io.containerd.runtime.v1.linux/moby/bbd5e4b5f9c13666dd0ec7ff7afb2c4c2b0ede40a4adf1de43cc31c606f283f5</span><br><span class="line">docker-co <span class="number">11646</span> root  rtd       DIR                <span class="number">8</span>,<span class="number">3</span>     <span class="number">4096</span>          <span class="number">2</span> /</span><br><span class="line">docker-co <span class="number">11646</span> root  txt       REG                <span class="number">8</span>,<span class="number">3</span>  <span class="number">4173632</span>     <span class="number">919772</span> /usr/bin/docker-containerd-shim</span><br><span class="line">docker-co <span class="number">11646</span> root    <span class="number">0</span>r      CHR                <span class="number">1</span>,<span class="number">3</span>      <span class="number">0</span>t0       <span class="number">2052</span> /dev/null</span><br><span class="line">docker-co <span class="number">11646</span> root    <span class="number">1</span>w      CHR                <span class="number">1</span>,<span class="number">3</span>      <span class="number">0</span>t0       <span class="number">2052</span> /dev/null</span><br><span class="line">docker-co <span class="number">11646</span> root    <span class="number">2</span>w      CHR                <span class="number">1</span>,<span class="number">3</span>      <span class="number">0</span>t0       <span class="number">2052</span> /dev/null</span><br><span class="line">docker-co <span class="number">11646</span> root    <span class="number">3</span>r     FIFO                <span class="number">0</span>,<span class="number">8</span>      <span class="number">0</span>t0 <span class="number">1070361745</span> pipe</span><br><span class="line">docker-co <span class="number">11646</span> root    <span class="number">4</span>u  a_inode                <span class="number">0</span>,<span class="number">9</span>        <span class="number">0</span>       <span class="number">7180</span> [eventpoll]</span><br><span class="line">docker-co <span class="number">11646</span> root    <span class="number">5</span>u  a_inode                <span class="number">0</span>,<span class="number">9</span>        <span class="number">0</span>       <span class="number">7180</span> [eventpoll]</span><br><span class="line">docker-co <span class="number">11646</span> root    <span class="number">6</span>u     unix <span class="number">0xffff881e8cac2800</span>      <span class="number">0</span>t0 <span class="number">1066743079</span> @/containerd-shim/moby/bbd5e4b5f9c13666dd0ec7ff7afb2c4c2b0ede40a4adf1de43cc31c606f283f5/shim.sock</span><br><span class="line">docker-co <span class="number">11646</span> root    <span class="number">7</span>u     unix <span class="number">0xffff881e8cac3400</span>      <span class="number">0</span>t0 <span class="number">1066743968</span> @/containerd-shim/moby/bbd5e4b5f9c13666dd0ec7ff7afb2c4c2b0ede40a4adf1de43cc31c606f283f5/shim.sock</span><br><span class="line">docker-co <span class="number">11646</span> root    <span class="number">8</span>r     FIFO                <span class="number">0</span>,<span class="number">8</span>      <span class="number">0</span>t0 <span class="number">1066743970</span> pipe</span><br><span class="line">docker-co <span class="number">11646</span> root    <span class="number">9</span>w     FIFO                <span class="number">0</span>,<span class="number">8</span>      <span class="number">0</span>t0 <span class="number">1070361745</span> pipe</span><br><span class="line">docker-co <span class="number">11646</span> root   <span class="number">10</span>r     FIFO                <span class="number">0</span>,<span class="number">8</span>      <span class="number">0</span>t0 <span class="number">1066743971</span> pipe</span><br><span class="line">docker-co <span class="number">11646</span> root   <span class="number">11</span>u     FIFO               <span class="number">0</span>,<span class="number">18</span>      <span class="number">0</span>t0 <span class="number">1066700778</span> /run/docker/containerd/bbd5e4b5f9c13666dd0ec7ff7afb2c4c2b0ede40a4adf1de43cc31c606f283f5/init-stdout</span><br><span class="line">docker-co <span class="number">11646</span> root   <span class="number">12</span>r     FIFO                <span class="number">0</span>,<span class="number">8</span>      <span class="number">0</span>t0 <span class="number">1066743972</span> pipe</span><br><span class="line">docker-co <span class="number">11646</span> root   <span class="number">13</span>w     FIFO               <span class="number">0</span>,<span class="number">18</span>      <span class="number">0</span>t0 <span class="number">1066700778</span> /run/docker/containerd/bbd5e4b5f9c13666dd0ec7ff7afb2c4c2b0ede40a4adf1de43cc31c606f283f5/init-stdout</span><br><span class="line">docker-co <span class="number">11646</span> root   <span class="number">14</span>u     FIFO               <span class="number">0</span>,<span class="number">18</span>      <span class="number">0</span>t0 <span class="number">1066700778</span> /run/docker/containerd/bbd5e4b5f9c13666dd0ec7ff7afb2c4c2b0ede40a4adf1de43cc31c606f283f5/init-stdout</span><br><span class="line">docker-co <span class="number">11646</span> root   <span class="number">15</span>r     FIFO               <span class="number">0</span>,<span class="number">18</span>      <span class="number">0</span>t0 <span class="number">1066700778</span> /run/docker/containerd/bbd5e4b5f9c13666dd0ec7ff7afb2c4c2b0ede40a4adf1de43cc31c606f283f5/init-stdout</span><br><span class="line">docker-co <span class="number">11646</span> root   <span class="number">16</span>u     FIFO               <span class="number">0</span>,<span class="number">18</span>      <span class="number">0</span>t0 <span class="number">1066700779</span> /run/docker/containerd/bbd5e4b5f9c13666dd0ec7ff7afb2c4c2b0ede40a4adf1de43cc31c606f283f5/init-stderr</span><br><span class="line">docker-co <span class="number">11646</span> root   <span class="number">17</span>w     FIFO               <span class="number">0</span>,<span class="number">18</span>      <span class="number">0</span>t0 <span class="number">1066700779</span> /run/docker/containerd/bbd5e4b5f9c13666dd0ec7ff7afb2c4c2b0ede40a4adf1de43cc31c606f283f5/init-stderr</span><br><span class="line">docker-co <span class="number">11646</span> root   <span class="number">18</span>u     FIFO               <span class="number">0</span>,<span class="number">18</span>      <span class="number">0</span>t0 <span class="number">1066700779</span> /run/docker/containerd/bbd5e4b5f9c13666dd0ec7ff7afb2c4c2b0ede40a4adf1de43cc31c606f283f5/init-stderr</span><br><span class="line">docker-co <span class="number">11646</span> root   <span class="number">19</span>r     FIFO               <span class="number">0</span>,<span class="number">18</span>      <span class="number">0</span>t0 <span class="number">1066700779</span> /run/docker/containerd/bbd5e4b5f9c13666dd0ec7ff7afb2c4c2b0ede40a4adf1de43cc31c606f283f5/init-stderr</span><br><span class="line">docker-co <span class="number">11646</span> root   <span class="number">20</span>r     FIFO                <span class="number">0</span>,<span class="number">8</span>      <span class="number">0</span>t0 <span class="number">1070361746</span> pipe</span><br><span class="line">docker-co <span class="number">11646</span> root   <span class="number">26</span>r     FIFO                <span class="number">0</span>,<span class="number">8</span>      <span class="number">0</span>t0 <span class="number">1070361747</span> pipe</span><br></pre></td></tr></table></figure>
+
+<p>有心人结合strace与lsof的结果，已经能够自己得出结论。</p>
+<p>runc init往2号FD内写数据时阻塞，2号FD对应的类型是pipe类型。而linux pipe有一个默认的数据大小，当写入的数据超过该大小时，同时读端并未读取数据，写端就会被阻塞。</p>
+<p>小结一下：containerd-shim启动runc exec去容器内执行用户命令，而runc exec启动runc init进入容器时，由于往2号FD写数据超过限制大小而被阻塞。当最底层的runc init被阻塞时，造成了调用链路上所有进程都被阻塞：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">runc init → runc exec → containerd-shim exec → containerd exec → dockerd exec</span><br></pre></td></tr></table></figure>
+
+<p>问题定位至此，我们已经了解了docker hang死的原因。但是，现在我们还有如下问题并未解决：</p>
+<ul>
+<li>为什么runc init会往2号FD (对应go语言的os.Stderr) 中写入超过linux pipe大小限制的数据？</li>
+<li>为什么runc init出现问题只发生在特定容器？</li>
+</ul>
+<p>如果常态下runc init就需要往os.Stdout或者os.Stderr中写入很多数据，那么所有容器的创建都应该有问题。所以，我们可以确定是该异常容器出现了什么未知原因，导致runc init非预期往os.Stderr写入了大量数据。而此时runc init往os.Stderr中写入的数据就很有可能揭示非预期的异常。</p>
+<p>所以，我们需要获取runc init当前正在写入的数据。由于runc init的2号FD是个匿名pipe，我们无法使用常规文件读取的方式获取pipe内的数据。这里感谢鹤哥趟坑，找到了一种读取匿名pipe内容的方法：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br><span class="line">91</span><br><span class="line">92</span><br><span class="line">93</span><br><span class="line">94</span><br><span class="line">95</span><br><span class="line">96</span><br><span class="line">97</span><br><span class="line">98</span><br><span class="line">99</span><br><span class="line">100</span><br><span class="line">101</span><br><span class="line">102</span><br><span class="line">103</span><br><span class="line">104</span><br><span class="line">105</span><br><span class="line">106</span><br><span class="line">107</span><br><span class="line">108</span><br><span class="line">109</span><br><span class="line">110</span><br><span class="line">111</span><br><span class="line">112</span><br><span class="line">113</span><br><span class="line">114</span><br><span class="line">115</span><br><span class="line">116</span><br><span class="line">117</span><br><span class="line">118</span><br><span class="line">119</span><br><span class="line">120</span><br><span class="line">121</span><br></pre></td><td class="code"><pre><span class="line"># cat /proc/<span class="number">15638</span>/fd/<span class="number">2</span></span><br><span class="line">runtime/cgo: pthread_create failed: Resource temporarily unavailable</span><br><span class="line">SIGABRT: abort</span><br><span class="line">PC=<span class="number">0x7f512b7365f7</span> m=<span class="number">0</span> sigcode=<span class="number">18446744073709551610</span></span><br><span class="line"></span><br><span class="line">goroutine <span class="number">0</span> [idle]:</span><br><span class="line">runtime: unknown pc <span class="number">0x7f512b7365f7</span></span><br><span class="line">stack: frame=&#123;sp:<span class="number">0x7ffe1121a658</span>, fp:<span class="number">0x0</span>&#125; stack=[<span class="number">0x7ffe0ae1bb28</span>,<span class="number">0x7ffe1121ab50</span>)</span><br><span class="line"><span class="number">00007</span>ffe1121a558:  <span class="number">00007</span>ffe1121a6d8  <span class="number">00007</span>ffe1121a6b0</span><br><span class="line"><span class="number">00007</span>ffe1121a568:  <span class="number">0000000000000001</span>  <span class="number">00007</span>f512c527660</span><br><span class="line"><span class="number">00007</span>ffe1121a578:  <span class="number">00007</span>f512c54d560  <span class="number">00007</span>f512c54d208</span><br><span class="line"><span class="number">00007</span>ffe1121a588:  <span class="number">00007</span>f512c333e6f  <span class="number">0000000000000000</span></span><br><span class="line"><span class="number">00007</span>ffe1121a598:  <span class="number">00007</span>f512c527660  <span class="number">0000000000000005</span></span><br><span class="line"><span class="number">00007</span>ffe1121a5a8:  <span class="number">0000000000000000</span>  <span class="number">0000000000000001</span></span><br><span class="line"><span class="number">00007</span>ffe1121a5b8:  <span class="number">00007</span>f512c54d208  <span class="number">00007</span>f512c528000</span><br><span class="line"><span class="number">00007</span>ffe1121a5c8:  <span class="number">00007</span>ffe1121a600  <span class="number">00007</span>f512b704b0c</span><br><span class="line"><span class="number">00007</span>ffe1121a5d8:  <span class="number">00007</span>f512b7110c0  <span class="number">0000000000000000</span></span><br><span class="line"><span class="number">00007</span>ffe1121a5e8:  <span class="number">00007</span>f512c54d560  <span class="number">00007</span>ffe1121a620</span><br><span class="line"><span class="number">00007</span>ffe1121a5f8:  <span class="number">00007</span>ffe1121a610  <span class="number">000000000</span>f11ed7d</span><br><span class="line"><span class="number">00007</span>ffe1121a608:  <span class="number">00007</span>f512c550153  <span class="number">00000000</span>ffffffff</span><br><span class="line"><span class="number">00007</span>ffe1121a618:  <span class="number">00007</span>f512c550a9b  <span class="number">00007</span>f512b707d00</span><br><span class="line"><span class="number">00007</span>ffe1121a628:  <span class="number">00007</span>f512babc868  <span class="number">00007</span>f512c9e9e5e</span><br><span class="line"><span class="number">00007</span>ffe1121a638:  <span class="number">00007</span>f512d3bb080  <span class="number">00000000000000</span>f1</span><br><span class="line"><span class="number">00007</span>ffe1121a648:  <span class="number">0000000000000011</span>  <span class="number">0000000000000000</span></span><br><span class="line"><span class="number">00007</span>ffe1121a658: &lt;<span class="number">00007</span>f512b737ce8  <span class="number">0000000000000020</span></span><br><span class="line"><span class="number">00007</span>ffe1121a668:  <span class="number">0000000000000000</span>  <span class="number">0000000000000000</span></span><br><span class="line"><span class="number">00007</span>ffe1121a678:  <span class="number">0000000000000000</span>  <span class="number">0000000000000000</span></span><br><span class="line"><span class="number">00007</span>ffe1121a688:  <span class="number">0000000000000000</span>  <span class="number">0000000000000000</span></span><br><span class="line"><span class="number">00007</span>ffe1121a698:  <span class="number">0000000000000000</span>  <span class="number">0000000000000000</span></span><br><span class="line"><span class="number">00007</span>ffe1121a6a8:  <span class="number">0000000000000000</span>  <span class="number">0000000000000000</span></span><br><span class="line"><span class="number">00007</span>ffe1121a6b8:  <span class="number">0000000000000000</span>  <span class="number">0000000000000000</span></span><br><span class="line"><span class="number">00007</span>ffe1121a6c8:  <span class="number">0000000000000000</span>  <span class="number">0000000000000000</span></span><br><span class="line"><span class="number">00007</span>ffe1121a6d8:  <span class="number">0000000000000000</span>  <span class="number">00007</span>f512babc868</span><br><span class="line"><span class="number">00007</span>ffe1121a6e8:  <span class="number">00007</span>f512c9e9e5e  <span class="number">00007</span>f512d3bb080</span><br><span class="line"><span class="number">00007</span>ffe1121a6f8:  <span class="number">00007</span>f512c33f260  <span class="number">00007</span>f512babc1c0</span><br><span class="line"><span class="number">00007</span>ffe1121a708:  <span class="number">00007</span>f512babc1c0  <span class="number">0000000000000001</span></span><br><span class="line"><span class="number">00007</span>ffe1121a718:  <span class="number">00007</span>f512babc243  <span class="number">00000000000000</span>f1</span><br><span class="line"><span class="number">00007</span>ffe1121a728:  <span class="number">00007</span>f512b7787ec  <span class="number">0000000000000001</span></span><br><span class="line"><span class="number">00007</span>ffe1121a738:  <span class="number">00007</span>f512babc1c0  <span class="number">000000000000000</span>a</span><br><span class="line"><span class="number">00007</span>ffe1121a748:  <span class="number">00007</span>f512b7e8a4d  <span class="number">000000000000000</span>a</span><br><span class="line">runtime: unknown pc <span class="number">0x7f512b7365f7</span></span><br><span class="line">stack: frame=&#123;sp:<span class="number">0x7ffe1121a658</span>, fp:<span class="number">0x0</span>&#125; stack=[<span class="number">0x7ffe0ae1bb28</span>,<span class="number">0x7ffe1121ab50</span>)</span><br><span class="line"><span class="number">00007</span>ffe1121a558:  <span class="number">00007</span>ffe1121a6d8  <span class="number">00007</span>ffe1121a6b0</span><br><span class="line"><span class="number">00007</span>ffe1121a568:  <span class="number">0000000000000001</span>  <span class="number">00007</span>f512c527660</span><br><span class="line"><span class="number">00007</span>ffe1121a578:  <span class="number">00007</span>f512c54d560  <span class="number">00007</span>f512c54d208</span><br><span class="line"><span class="number">00007</span>ffe1121a588:  <span class="number">00007</span>f512c333e6f  <span class="number">0000000000000000</span></span><br><span class="line"><span class="number">00007</span>ffe1121a598:  <span class="number">00007</span>f512c527660  <span class="number">0000000000000005</span></span><br><span class="line"><span class="number">00007</span>ffe1121a5a8:  <span class="number">0000000000000000</span>  <span class="number">0000000000000001</span></span><br><span class="line"><span class="number">00007</span>ffe1121a5b8:  <span class="number">00007</span>f512c54d208  <span class="number">00007</span>f512c528000</span><br><span class="line"><span class="number">00007</span>ffe1121a5c8:  <span class="number">00007</span>ffe1121a600  <span class="number">00007</span>f512b704b0c</span><br><span class="line"><span class="number">00007</span>ffe1121a5d8:  <span class="number">00007</span>f512b7110c0  <span class="number">0000000000000000</span></span><br><span class="line"><span class="number">00007</span>ffe1121a5e8:  <span class="number">00007</span>f512c54d560  <span class="number">00007</span>ffe1121a620</span><br><span class="line"><span class="number">00007</span>ffe1121a5f8:  <span class="number">00007</span>ffe1121a610  <span class="number">000000000</span>f11ed7d</span><br><span class="line"><span class="number">00007</span>ffe1121a608:  <span class="number">00007</span>f512c550153  <span class="number">00000000</span>ffffffff</span><br><span class="line"><span class="number">00007</span>ffe1121a618:  <span class="number">00007</span>f512c550a9b  <span class="number">00007</span>f512b707d00</span><br><span class="line"><span class="number">00007</span>ffe1121a628:  <span class="number">00007</span>f512babc868  <span class="number">00007</span>f512c9e9e5e</span><br><span class="line"><span class="number">00007</span>ffe1121a638:  <span class="number">00007</span>f512d3bb080  <span class="number">00000000000000</span>f1</span><br><span class="line"><span class="number">00007</span>ffe1121a648:  <span class="number">0000000000000011</span>  <span class="number">0000000000000000</span></span><br><span class="line"><span class="number">00007</span>ffe1121a658: &lt;<span class="number">00007</span>f512b737ce8  <span class="number">0000000000000020</span></span><br><span class="line"><span class="number">00007</span>ffe1121a668:  <span class="number">0000000000000000</span>  <span class="number">0000000000000000</span></span><br><span class="line"><span class="number">00007</span>ffe1121a678:  <span class="number">0000000000000000</span>  <span class="number">0000000000000000</span></span><br><span class="line"><span class="number">00007</span>ffe1121a688:  <span class="number">0000000000000000</span>  <span class="number">0000000000000000</span></span><br><span class="line"><span class="number">00007</span>ffe1121a698:  <span class="number">0000000000000000</span>  <span class="number">0000000000000000</span></span><br><span class="line"><span class="number">00007</span>ffe1121a6a8:  <span class="number">0000000000000000</span>  <span class="number">0000000000000000</span></span><br><span class="line"><span class="number">00007</span>ffe1121a6b8:  <span class="number">0000000000000000</span>  <span class="number">0000000000000000</span></span><br><span class="line"><span class="number">00007</span>ffe1121a6c8:  <span class="number">0000000000000000</span>  <span class="number">0000000000000000</span></span><br><span class="line"><span class="number">00007</span>ffe1121a6d8:  <span class="number">0000000000000000</span>  <span class="number">00007</span>f512babc868</span><br><span class="line"><span class="number">00007</span>ffe1121a6e8:  <span class="number">00007</span>f512c9e9e5e  <span class="number">00007</span>f512d3bb080</span><br><span class="line"><span class="number">00007</span>ffe1121a6f8:  <span class="number">00007</span>f512c33f260  <span class="number">00007</span>f512babc1c0</span><br><span class="line"><span class="number">00007</span>ffe1121a708:  <span class="number">00007</span>f512babc1c0  <span class="number">0000000000000001</span></span><br><span class="line"><span class="number">00007</span>ffe1121a718:  <span class="number">00007</span>f512babc243  <span class="number">00000000000000</span>f1</span><br><span class="line"><span class="number">00007</span>ffe1121a728:  <span class="number">00007</span>f512b7787ec  <span class="number">0000000000000001</span></span><br><span class="line"><span class="number">00007</span>ffe1121a738:  <span class="number">00007</span>f512babc1c0  <span class="number">000000000000000</span>a</span><br><span class="line"><span class="number">00007</span>ffe1121a748:  <span class="number">00007</span>f512b7e8a4d  <span class="number">000000000000000</span>a</span><br><span class="line"></span><br><span class="line">goroutine <span class="number">1</span> [running, locked to thread]:</span><br><span class="line">runtime.systemstack_switch()</span><br><span class="line">	/usr/local/<span class="keyword">go</span>/src/runtime/asm_amd64.s:<span class="number">363</span> fp=<span class="number">0xc4200a3ed0</span> sp=<span class="number">0xc4200a3ec8</span> pc=<span class="number">0x7f512c7281d0</span></span><br><span class="line">runtime.startTheWorld()</span><br><span class="line">	/usr/local/<span class="keyword">go</span>/src/runtime/proc.<span class="keyword">go</span>:<span class="number">978</span> +<span class="number">0x2f</span> fp=<span class="number">0xc4200a3ee8</span> sp=<span class="number">0xc4200a3ed0</span> pc=<span class="number">0x7f512c70221f</span></span><br><span class="line">runtime.GOMAXPROCS(<span class="number">0x1</span>, <span class="number">0xc42013d9a0</span>)</span><br><span class="line">	/usr/local/<span class="keyword">go</span>/src/runtime/debug.<span class="keyword">go</span>:<span class="number">30</span> +<span class="number">0xa0</span> fp=<span class="number">0xc4200a3f10</span> sp=<span class="number">0xc4200a3ee8</span> pc=<span class="number">0x7f512c6d9810</span></span><br><span class="line">main.init<span class="number">.0</span>()</span><br><span class="line">	/<span class="keyword">go</span>/src/github.com/opencontainers/runc/init.<span class="keyword">go</span>:<span class="number">14</span> +<span class="number">0x61</span> fp=<span class="number">0xc4200a3f30</span> sp=<span class="number">0xc4200a3f10</span> pc=<span class="number">0x7f512c992801</span></span><br><span class="line">main.init()</span><br><span class="line">	&lt;autogenerated&gt;:<span class="number">1</span> +<span class="number">0x624</span> fp=<span class="number">0xc4200a3f88</span> sp=<span class="number">0xc4200a3f30</span> pc=<span class="number">0x7f512c9a1014</span></span><br><span class="line">runtime.main()</span><br><span class="line">	/usr/local/<span class="keyword">go</span>/src/runtime/proc.<span class="keyword">go</span>:<span class="number">186</span> +<span class="number">0x1d2</span> fp=<span class="number">0xc4200a3fe0</span> sp=<span class="number">0xc4200a3f88</span> pc=<span class="number">0x7f512c6ff962</span></span><br><span class="line">runtime.goexit()</span><br><span class="line">	/usr/local/<span class="keyword">go</span>/src/runtime/asm_amd64.s:<span class="number">2361</span> +<span class="number">0x1</span> fp=<span class="number">0xc4200a3fe8</span> sp=<span class="number">0xc4200a3fe0</span> pc=<span class="number">0x7f512c72ad71</span></span><br><span class="line"></span><br><span class="line">goroutine <span class="number">6</span> [syscall]:</span><br><span class="line">os/signal.signal_recv(<span class="number">0x0</span>)</span><br><span class="line">	/usr/local/<span class="keyword">go</span>/src/runtime/sigqueue.<span class="keyword">go</span>:<span class="number">139</span> +<span class="number">0xa8</span></span><br><span class="line">os/signal.loop()</span><br><span class="line">	/usr/local/<span class="keyword">go</span>/src/os/signal/signal_unix.<span class="keyword">go</span>:<span class="number">22</span> +<span class="number">0x24</span></span><br><span class="line">created by os/signal.init<span class="number">.0</span></span><br><span class="line">	/usr/local/<span class="keyword">go</span>/src/os/signal/signal_unix.<span class="keyword">go</span>:<span class="number">28</span> +<span class="number">0x43</span></span><br><span class="line"></span><br><span class="line">rax    <span class="number">0x0</span></span><br><span class="line">rbx    <span class="number">0x7f512babc868</span></span><br><span class="line">rcx    <span class="number">0xffffffffffffffff</span></span><br><span class="line">rdx    <span class="number">0x6</span></span><br><span class="line">rdi    <span class="number">0x271</span></span><br><span class="line">rsi    <span class="number">0x271</span></span><br><span class="line">rbp    <span class="number">0x7f512c9e9e5e</span></span><br><span class="line">rsp    <span class="number">0x7ffe1121a658</span></span><br><span class="line">r8     <span class="number">0xa</span></span><br><span class="line">r9     <span class="number">0x7f512c524740</span></span><br><span class="line">r10    <span class="number">0x8</span></span><br><span class="line">r11    <span class="number">0x206</span></span><br><span class="line">r12    <span class="number">0x7f512d3bb080</span></span><br><span class="line">r13    <span class="number">0xf1</span></span><br><span class="line">r14    <span class="number">0x11</span></span><br><span class="line">r15    <span class="number">0x0</span></span><br><span class="line">rip    <span class="number">0x7f512b7365f7</span></span><br><span class="line">rflags <span class="number">0x206</span></span><br><span class="line">cs     <span class="number">0x33</span></span><br><span class="line">fs     <span class="number">0x0</span></span><br><span class="line">gs     <span class="number">0x0</span></span><br><span class="line">exec failed: container_linux.<span class="keyword">go</span>:<span class="number">348</span>: starting container process caused <span class="string">&quot;read init-p: connection reset by peer&quot;</span></span><br></pre></td></tr></table></figure>
+
+<p>额，runc init因资源不足创建线程失败？？？这种输出显然不是runc的输出，而是go runtime非预期的输出内容。那么资源不足，究竟是什么资源类型资源不足呢？我们在结合 /var/log/message 日志分析：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br></pre></td><td class="code"><pre><span class="line">Jun <span class="number">17</span> <span class="number">03</span>:<span class="number">18</span>:<span class="number">17</span> host-xx kernel: runc:[<span class="number">2</span>:INIT] invoked oom-killer: gfp_mask=<span class="number">0xd0</span>, order=<span class="number">0</span>, oom_score_adj=<span class="number">997</span></span><br><span class="line">Jun <span class="number">17</span> <span class="number">03</span>:<span class="number">18</span>:<span class="number">17</span> host-xx kernel: CPU: <span class="number">14</span> PID: <span class="number">12788</span> Comm: runc:[<span class="number">2</span>:INIT] Tainted: G        W  OE  ------------ T <span class="number">3.10</span><span class="number">.0</span><span class="number">-514.16</span><span class="number">.1</span>.el7.stable.v1<span class="number">.4</span>.x86_64 #<span class="number">1</span></span><br><span class="line">Jun <span class="number">17</span> <span class="number">03</span>:<span class="number">18</span>:<span class="number">17</span> host-xx kernel: Hardware name: Inspur SA5212M4/YZMB<span class="number">-00370</span><span class="number">-107</span>, BIOS <span class="number">4.1</span><span class="number">.10</span> <span class="number">11</span>/<span class="number">14</span>/<span class="number">2016</span></span><br><span class="line">Jun <span class="number">17</span> <span class="number">03</span>:<span class="number">18</span>:<span class="number">17</span> host-xx kernel: ffff88103841dee0 <span class="number">00000000</span>c4394691 ffff880263e4bcb8 ffffffff8168863d</span><br><span class="line">Jun <span class="number">17</span> <span class="number">03</span>:<span class="number">18</span>:<span class="number">17</span> host-xx kernel: ffff880263e4bd50 ffffffff81683585 ffff88203cc5e300 ffff880ee02b2380</span><br><span class="line">Jun <span class="number">17</span> <span class="number">03</span>:<span class="number">18</span>:<span class="number">17</span> host-xx kernel: <span class="number">0000000000000001</span> <span class="number">0000000000000000</span> <span class="number">0000000000000000</span> <span class="number">0000000000000046</span></span><br><span class="line">Jun <span class="number">17</span> <span class="number">03</span>:<span class="number">18</span>:<span class="number">17</span> host-xx kernel: Call Trace:</span><br><span class="line">Jun <span class="number">17</span> <span class="number">03</span>:<span class="number">18</span>:<span class="number">17</span> host-xx kernel: [&lt;ffffffff8168863d&gt;] dump_stack+<span class="number">0x19</span>/<span class="number">0x1b</span></span><br><span class="line">Jun <span class="number">17</span> <span class="number">03</span>:<span class="number">18</span>:<span class="number">17</span> host-xx kernel: [&lt;ffffffff81683585&gt;] dump_header+<span class="number">0x85</span>/<span class="number">0x27f</span></span><br><span class="line">Jun <span class="number">17</span> <span class="number">03</span>:<span class="number">18</span>:<span class="number">17</span> host-xx kernel: [&lt;ffffffff81185b06&gt;] ? find_lock_task_mm+<span class="number">0x56</span>/<span class="number">0xc0</span></span><br><span class="line">Jun <span class="number">17</span> <span class="number">03</span>:<span class="number">18</span>:<span class="number">17</span> host-xx kernel: [&lt;ffffffff81185fbe&gt;] oom_kill_process+<span class="number">0x24e</span>/<span class="number">0x3c0</span></span><br><span class="line">Jun <span class="number">17</span> <span class="number">03</span>:<span class="number">18</span>:<span class="number">17</span> host-xx kernel: [&lt;ffffffff81093c2e&gt;] ? has_capability_noaudit+<span class="number">0x1e</span>/<span class="number">0x30</span></span><br><span class="line">Jun <span class="number">17</span> <span class="number">03</span>:<span class="number">18</span>:<span class="number">17</span> host-xx kernel: [&lt;ffffffff811f4d91&gt;] mem_cgroup_oom_synchronize+<span class="number">0x551</span>/<span class="number">0x580</span></span><br><span class="line">Jun <span class="number">17</span> <span class="number">03</span>:<span class="number">18</span>:<span class="number">17</span> host-xx kernel: [&lt;ffffffff811f41b0&gt;] ? mem_cgroup_charge_common+<span class="number">0xc0</span>/<span class="number">0xc0</span></span><br><span class="line">Jun <span class="number">17</span> <span class="number">03</span>:<span class="number">18</span>:<span class="number">17</span> host-xx kernel: [&lt;ffffffff81186844&gt;] pagefault_out_of_memory+<span class="number">0x14</span>/<span class="number">0x90</span></span><br><span class="line">Jun <span class="number">17</span> <span class="number">03</span>:<span class="number">18</span>:<span class="number">17</span> host-xx kernel: [&lt;ffffffff816813fa&gt;] mm_fault_error+<span class="number">0x68</span>/<span class="number">0x12b</span></span><br><span class="line">Jun <span class="number">17</span> <span class="number">03</span>:<span class="number">18</span>:<span class="number">17</span> host-xx kernel: [&lt;ffffffff81694405&gt;] __do_page_fault+<span class="number">0x395</span>/<span class="number">0x450</span></span><br><span class="line">Jun <span class="number">17</span> <span class="number">03</span>:<span class="number">18</span>:<span class="number">17</span> host-xx kernel: [&lt;ffffffff816944f5&gt;] do_page_fault+<span class="number">0x35</span>/<span class="number">0x90</span></span><br><span class="line">Jun <span class="number">17</span> <span class="number">03</span>:<span class="number">18</span>:<span class="number">17</span> host-xx kernel: [&lt;ffffffff81690708&gt;] page_fault+<span class="number">0x28</span>/<span class="number">0x30</span></span><br><span class="line">Jun <span class="number">17</span> <span class="number">03</span>:<span class="number">18</span>:<span class="number">17</span> host-xx kernel: memory: usage <span class="number">3145728</span>kB, limit <span class="number">3145728</span>kB, failcnt <span class="number">14406932</span></span><br><span class="line">Jun <span class="number">17</span> <span class="number">03</span>:<span class="number">18</span>:<span class="number">17</span> host-xx kernel: memory+swap: usage <span class="number">3145728</span>kB, limit <span class="number">9007199254740988</span>kB, failcnt <span class="number">0</span></span><br><span class="line">Jun <span class="number">17</span> <span class="number">03</span>:<span class="number">18</span>:<span class="number">17</span> host-xx kernel: kmem: usage <span class="number">3143468</span>kB, limit <span class="number">9007199254740988</span>kB, failcnt <span class="number">0</span></span><br><span class="line">Jun <span class="number">17</span> <span class="number">03</span>:<span class="number">18</span>:<span class="number">17</span> host-xx kernel: Memory cgroup stats <span class="keyword">for</span> /kubepods/burstable/pod6c4333b3-a663<span class="number">-11</span>ea-b39f<span class="number">-6</span>c92bf85beda: cache:<span class="number">0</span>KB rss:<span class="number">0</span>KB rss_huge:<span class="number">0</span>KB mapped_file:<span class="number">0</span>KB swap:<span class="number">0</span>KB inactive_anon:<span class="number">0</span>KB active_anon:<span class="number">0</span>KB inactive_file:<span class="number">0</span>KB active_file:<span class="number">0</span>KB unevictable:<span class="number">0</span>KB</span><br><span class="line">Jun <span class="number">17</span> <span class="number">03</span>:<span class="number">18</span>:<span class="number">17</span> host-xx kernel: Memory cgroup stats <span class="keyword">for</span> /kubepods/burstable/pod6c4333b3-a663<span class="number">-11</span>ea-b39f<span class="number">-6</span>c92bf85beda/b761e05249245695278b3f409d2d6e5c6a5bff6995ff0cf44d03af4aa9764a30: cache:<span class="number">0</span>KB rss:<span class="number">40</span>KB rss_huge:<span class="number">0</span>KB mapped_file:<span class="number">0</span>KB swap:<span class="number">0</span>KB inactive_anon:<span class="number">0</span>KB active_anon:<span class="number">40</span>KB inactive_file:<span class="number">0</span>KB active_file:<span class="number">0</span>KB unevictable:<span class="number">0</span>KB</span><br><span class="line">Jun <span class="number">17</span> <span class="number">03</span>:<span class="number">18</span>:<span class="number">17</span> host-xx kernel: Memory cgroup stats <span class="keyword">for</span> /kubepods/burstable/pod6c4333b3-a663<span class="number">-11</span>ea-b39f<span class="number">-6</span>c92bf85beda/<span class="number">1</span>d1750ecc627cc5d60d80c071b2eb4d515ee8880c5b5136883164f08319869b0: cache:<span class="number">0</span>KB rss:<span class="number">0</span>KB rss_huge:<span class="number">0</span>KB mapped_file:<span class="number">0</span>KB swap:<span class="number">0</span>KB inactive_anon:<span class="number">0</span>KB active_anon:<span class="number">0</span>KB inactive_file:<span class="number">0</span>KB active_file:<span class="number">0</span>KB unevictable:<span class="number">0</span>KB</span><br><span class="line">Jun <span class="number">17</span> <span class="number">03</span>:<span class="number">18</span>:<span class="number">17</span> host-xx kernel: Memory cgroup stats <span class="keyword">for</span> /kubepods/burstable/pod6c4333b3-a663<span class="number">-11</span>ea-b39f<span class="number">-6</span>c92bf85beda/bbd5e4b5f9c13666dd0ec7ff7afb2c4c2b0ede40a4adf1de43cc31c606f283f5: cache:<span class="number">0</span>KB rss:<span class="number">2220</span>KB rss_huge:<span class="number">0</span>KB mapped_file:<span class="number">0</span>KB swap:<span class="number">0</span>KB inactive_anon:<span class="number">0</span>KB active_anon:<span class="number">2140</span>KB inactive_file:<span class="number">0</span>KB active_file:<span class="number">0</span>KB unevictable:<span class="number">0</span>KB</span><br><span class="line">Jun <span class="number">17</span> <span class="number">03</span>:<span class="number">18</span>:<span class="number">17</span> host-xx kernel: Memory cgroup stats <span class="keyword">for</span> /kubepods/burstable/pod6c4333b3-a663<span class="number">-11</span>ea-b39f<span class="number">-6</span>c92bf85beda/bbd5e4b5f9c13666dd0ec7ff7afb2c4c2b0ede40a4adf1de43cc31c606f283f5/super-agent: cache:<span class="number">0</span>KB rss:<span class="number">0</span>KB rss_huge:<span class="number">0</span>KB mapped_file:<span class="number">0</span>KB swap:<span class="number">0</span>KB inactive_anon:<span class="number">0</span>KB active_anon:<span class="number">0</span>KB inactive_file:<span class="number">0</span>KB active_file:<span class="number">0</span>KB unevictable:<span class="number">0</span>KB</span><br><span class="line">Jun <span class="number">17</span> <span class="number">03</span>:<span class="number">18</span>:<span class="number">17</span> host-xx kernel: [ pid ]   uid  tgid total_vm      rss nr_ptes swapents oom_score_adj name</span><br><span class="line">Jun <span class="number">17</span> <span class="number">03</span>:<span class="number">18</span>:<span class="number">17</span> host-xx kernel: [<span class="number">30598</span>]     <span class="number">0</span> <span class="number">30598</span>      <span class="number">255</span>        <span class="number">1</span>       <span class="number">4</span>        <span class="number">0</span>          <span class="number">-998</span> pause</span><br><span class="line">Jun <span class="number">17</span> <span class="number">03</span>:<span class="number">18</span>:<span class="number">17</span> host-xx kernel: [<span class="number">11680</span>]     <span class="number">0</span> <span class="number">11680</span>   <span class="number">164833</span>     <span class="number">1118</span>      <span class="number">20</span>        <span class="number">0</span>           <span class="number">997</span> dockerinit</span><br><span class="line">Jun <span class="number">17</span> <span class="number">03</span>:<span class="number">18</span>:<span class="number">17</span> host-xx kernel: [<span class="number">12788</span>]     <span class="number">0</span> <span class="number">12788</span>   <span class="number">150184</span>     <span class="number">1146</span>      <span class="number">23</span>        <span class="number">0</span>           <span class="number">997</span> runc:[<span class="number">2</span>:INIT]</span><br><span class="line">Jun <span class="number">17</span> <span class="number">03</span>:<span class="number">18</span>:<span class="number">17</span> host-xx kernel: oom-kill:,cpuset=bbd5e4b5f9c13666dd0ec7ff7afb2c4c2b0ede40a4adf1de43cc31c606f283f5,mems_allowed=<span class="number">0</span><span class="number">-1</span>,oom_memcg=/kubepods/burstable/pod6c4333b3-a663<span class="number">-11</span>ea-b39f<span class="number">-6</span>c92bf85beda,task_memcg=/kubepods/burstable/pod6c4333b3-a663<span class="number">-11</span>ea-b39f<span class="number">-6</span>c92bf85beda/bbd5e4b5f9c13666dd0ec7ff7afb2c4c2b0ede40a4adf1de43cc31c606f283f5,task=runc:[<span class="number">2</span>:INIT],pid=<span class="number">12800</span>,uid=<span class="number">0</span></span><br><span class="line">Jun <span class="number">17</span> <span class="number">03</span>:<span class="number">18</span>:<span class="number">17</span> host-xx kernel: Memory cgroup out of memory: Kill process <span class="number">12800</span> (runc:[<span class="number">2</span>:INIT]) score <span class="number">997</span> or sacrifice child</span><br><span class="line">Jun <span class="number">17</span> <span class="number">03</span>:<span class="number">18</span>:<span class="number">17</span> host-xx kernel: Killed process <span class="number">12788</span> (runc:[<span class="number">2</span>:INIT]) total-vm:<span class="number">600736</span>kB, anon-rss:<span class="number">3296</span>kB, file-rss:<span class="number">276</span>kB, shmem-rss:<span class="number">1012</span>kB</span><br></pre></td></tr></table></figure>
+
+<p>/var/log/message 记录了该容器在大约1个月前大量的OOM日志信息，该时间与异常的runc init进程启动时间基本匹配。</p>
+<p>小结runc init阻塞的原因：在一个非常关键的时间节点，runc init由于内存资源不足，创建线程失败，触发go runtime的非预期输出，进而造成runc init阻塞在写pipe操作。</p>
+<p>定位至此，问题的全貌已经基本描述清楚。但是我们还有一个疑问，既然runc init在往pipe中写数据，难道没有其它进程来读取pipe中的内容吗？</p>
+<p>大家还记得上面lsof执行的结果吗？有心人一定发现了该pipe的读端是谁了，对，就是containerd-shim，对应的pipe的inode编号为1070361747。那么，为什么containerd-shim没有来读pipe里面的内容呢？我们结合代码来分析：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(e *execProcess)</span> <span class="title">start</span><span class="params">(ctx context.Context)</span> <span class="params">(err error)</span></span> &#123;</span><br><span class="line">   ......</span><br><span class="line">   <span class="keyword">if</span> err := e.parent.runtime.Exec(ctx, e.parent.id, e.spec, opts); err != <span class="literal">nil</span> &#123;   <span class="comment">// 执行runc init</span></span><br><span class="line">      <span class="built_in">close</span>(e.waitBlock)</span><br><span class="line">      <span class="keyword">return</span> e.parent.runtimeError(err, <span class="string">&quot;OCI runtime exec failed&quot;</span>)</span><br><span class="line">   &#125;</span><br><span class="line">   ......</span><br><span class="line">   <span class="keyword">else</span> <span class="keyword">if</span> !e.stdio.IsNull() &#123;</span><br><span class="line">      fifoCtx, cancel := context.WithTimeout(ctx, <span class="number">15</span>*time.Second)</span><br><span class="line">      <span class="keyword">defer</span> cancel()</span><br><span class="line"></span><br><span class="line">      <span class="keyword">if</span> err := copyPipes(fifoCtx, e.io, e.stdio.Stdin, e.stdio.Stdout, e.stdio.Stderr, &amp;e.wg, &amp;copyWaitGroup); err != <span class="literal">nil</span> &#123;   <span class="comment">// 读pipe</span></span><br><span class="line">         <span class="keyword">return</span> errors.Wrap(err, <span class="string">&quot;failed to start io pipe copy&quot;</span>)</span><br><span class="line">      &#125;</span><br><span class="line">   &#125;</span><br><span class="line">   ......</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(r *Runc)</span> <span class="title">Exec</span><span class="params">(context context.Context, id <span class="keyword">string</span>, spec specs.Process, opts *ExecOpts)</span> <span class="title">error</span></span> &#123;</span><br><span class="line">   ......</span><br><span class="line">   cmd := r.command(context, <span class="built_in">append</span>(args, id)...)</span><br><span class="line">   <span class="keyword">if</span> opts != <span class="literal">nil</span> &amp;&amp; opts.IO != <span class="literal">nil</span> &#123;</span><br><span class="line">      opts.Set(cmd)</span><br><span class="line">   &#125;</span><br><span class="line">   ......</span><br><span class="line">   ec, err := Monitor.Start(cmd)</span><br><span class="line">   ......</span><br><span class="line">   status, err := Monitor.Wait(cmd, ec)</span><br><span class="line">   ......</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>额，containerd-shim的设计是，等待runc init执行完成之后，再来读取pipe中的内容。但是此时的runc init由于非预期的写入数据量比较大，被阻塞在了写pipe操作处。。。完美的死锁。</p>
+<p>终于，本次docker hang死问题的核心脉络都已理清。接下来我们再来聊聊解决方案。</p>
+<h3 id="解决方案"><a href="#解决方案" class="headerlink" title="解决方案"></a>解决方案</h3><p>当了解了docker hang死的成因之后，我们可以针对性的提出如下解决办法。</p>
+<h4 id="最直观的办法"><a href="#最直观的办法" class="headerlink" title="最直观的办法"></a>最直观的办法</h4><p>既然docker exec可能会引起docker hang死，那么我们禁用系统中所有的docker exec操作即可。最典型的是kubelet的probe，当前我们默认给所有Pod添加了ReadinessProbe，并且是以exec的形式进入容器内执行命令。我们调整kubelet的探测行为，修改为tcp或者http probe即可。</p>
+<p>这里组件虽然改动不大，但是涉及业务容器的改造成本太大了，如何迁移存量集群是个大问题。</p>
+<h4 id="最根本的办法"><a href="#最根本的办法" class="headerlink" title="最根本的办法"></a>最根本的办法</h4><p>既然当前containerd-shim读pipe需要等待runc exec执行完毕，如果我们将读pipe的操作提前至runc exec命令执行之前，理论上也可以避免死锁。</p>
+<p>同样。这种方案的升级成本太高了，升级containerd-shim时需要重启存量的所有容器，这个方案基本不可能通过评审。</p>
+<h4 id="最简单的办法"><a href="#最简单的办法" class="headerlink" title="最简单的办法"></a>最简单的办法</h4><p>既然runc init阻塞在写pipe，我们主动读取pipe内的内容，也能让runc init顺利退出。</p>
+<p>在将本解决方案自动化的过程中，如何能够识别如docker hang死是由于写pipe导致的，是一个小小的挑战。但是相对于以上两种解决方案，我认为还是值得一试，毕竟其影响微乎其微。</p>
+<h3 id="后续"><a href="#后续" class="headerlink" title="后续"></a>后续</h3><p>其实我们在读pipe的时候还引起了一个另外的问题，详见：<a href="https://plpan.github.io/2020/07/19/%E4%B8%80%E6%AC%A1%E8%AF%BB-pipe-%E5%BC%95%E5%8F%91%E7%9A%84%E8%A1%80%E6%A1%88/">一次读-pipe-引发的血案</a>。</p>
+<p>另外，docker hang死的原因远非这一种，本次排查的结果也并非适用于所有场景。希望各位看官能够根据自己的现场排查问题。</p>
+<p>本次docker hang死的排查之旅已然告终。</p>
+<p>本次排查由四人小分队 @飞哥 @鹤哥 @博哥 @我 一起排查长达数天的结论，欢迎大家一键三连，以表支持。</p>
+<p>以上排查如果有误，也欢迎指正。</p>
+
+      
+    </div>
+    
+    
+    
+
+    
+
+    
+      <div>
+        <div style="padding: 10px 0; margin: 20px auto; width: 90%; text-align: center;">
+  <div></div>
+  <button id="rewardButton" disable="enable" onclick="var qr = document.getElementById('QR'); if (qr.style.display === 'none') {qr.style.display='block';} else {qr.style.display='none'}">
+    <span>打赏</span>
+  </button>
+  <div id="QR" style="display: none;">
+
+    
+      <div id="wechat" style="display: inline-block">
+        <img id="wechat_qr" src="/images/wechatpay.png" alt=" 微信支付"/>
+        <p>微信支付</p>
+      </div>
+    
+
+    
+
+    
+
+  </div>
+</div>
+
+      </div>
+    
+
+    
+
+    <footer class="post-footer">
+      
+        <div class="post-tags">
+          
+            <a href="/tags/docker/" rel="tag"># docker</a>
+          
+            <a href="/tags/containerd/" rel="tag"># containerd</a>
+          
+            <a href="/tags/runc/" rel="tag"># runc</a>
+          
+        </div>
+      
+
+      
+      
+      
+
+      
+        <div class="post-nav">
+          <div class="post-nav-next post-nav-item">
+            
+              <a href="/netns-leak-%E6%8E%92%E6%9F%A5%E4%B9%8B%E6%97%85/" rel="next" title="netns leak 排查之旅">
+                <i class="fa fa-chevron-left"></i> netns leak 排查之旅
+              </a>
+            
+          </div>
+
+          <span class="post-nav-divider"></span>
+
+          <div class="post-nav-prev post-nav-item">
+            
+              <a href="/docker-hang-%E6%AD%BB%E9%98%BB%E5%A1%9E-kubelet-%E5%88%9D%E5%A7%8B%E5%8C%96%E6%B5%81%E7%A8%8B/" rel="prev" title="docker hang 死阻塞 kubelet 初始化流程">
+                docker hang 死阻塞 kubelet 初始化流程 <i class="fa fa-chevron-right"></i>
+              </a>
+            
+          </div>
+        </div>
+      
+
+      
+      
+    </footer>
+  </div>
+  
+  
+  
+  </article>
+
+
+
+    <div class="post-spread">
+      
+    </div>
+  </div>
+
+
+          </div>
+          
+
+
+          
+
+  
+
+
+
+        </div>
+        
+          
+  
+  <div class="sidebar-toggle">
+    <div class="sidebar-toggle-line-wrap">
+      <span class="sidebar-toggle-line sidebar-toggle-line-first"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-middle"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-last"></span>
+    </div>
+  </div>
+
+  <aside id="sidebar" class="sidebar">
+    
+    <div class="sidebar-inner">
+
+      
+
+      
+        <ul class="sidebar-nav motion-element">
+          <li class="sidebar-nav-toc sidebar-nav-active" data-target="post-toc-wrap">
+            文章目录
+          </li>
+          <li class="sidebar-nav-overview" data-target="site-overview-wrap">
+            站点概览
+          </li>
+        </ul>
+      
+
+      <section class="site-overview-wrap sidebar-panel">
+        <div class="site-overview">
+          <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+            
+              <p class="site-author-name" itemprop="name"></p>
+              <p class="site-description motion-element" itemprop="description"></p>
+          </div>
+
+          <nav class="site-state motion-element">
+
+            
+              <div class="site-state-item site-state-posts">
+              
+                <a href="/archives">
+              
+                  <span class="site-state-item-count">7</span>
+                  <span class="site-state-item-name">日志</span>
+                </a>
+              </div>
+            
+
+            
+              
+              
+              <div class="site-state-item site-state-categories">
+                
+                  <span class="site-state-item-count">2</span>
+                  <span class="site-state-item-name">分类</span>
+                
+              </div>
+            
+
+            
+              
+              
+              <div class="site-state-item site-state-tags">
+                
+                  <span class="site-state-item-count">8</span>
+                  <span class="site-state-item-name">标签</span>
+                
+              </div>
+            
+
+          </nav>
+
+          
+            <div class="feed-link motion-element">
+              <a href="/atom.xml" rel="alternate">
+                <i class="fa fa-rss"></i>
+                RSS
+              </a>
+            </div>
+          
+
+          
+            <div class="links-of-author motion-element">
+                
+                  <span class="links-of-author-item">
+                    <a href="https://github.com/plpan" target="_blank" title="GitHub">
+                      GitHub</a>
+                  </span>
+                
+            </div>
+          
+
+          
+          
+
+          
+          
+
+          
+
+        </div>
+      </section>
+
+      
+      <!--noindex-->
+        <section class="post-toc-wrap motion-element sidebar-panel sidebar-panel-active">
+          <div class="post-toc">
+
+            
+              
+            
+
+            
+              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E8%83%8C%E6%99%AF"><span class="nav-number">1.</span> <span class="nav-text">背景</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#docker-hang%E6%AD%BB"><span class="nav-number">2.</span> <span class="nav-text">docker hang死</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#%E9%93%BE%E8%B7%AF%E8%B7%9F%E8%B8%AA"><span class="nav-number">2.1.</span> <span class="nav-text">链路跟踪</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#%E8%BF%9B%E7%A8%8B%E6%8E%92%E6%9F%A5"><span class="nav-number">2.2.</span> <span class="nav-text">进程排查</span></a></li></ol></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E8%A7%A3%E5%86%B3%E6%96%B9%E6%A1%88"><span class="nav-number">3.</span> <span class="nav-text">解决方案</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#%E6%9C%80%E7%9B%B4%E8%A7%82%E7%9A%84%E5%8A%9E%E6%B3%95"><span class="nav-number">3.1.</span> <span class="nav-text">最直观的办法</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#%E6%9C%80%E6%A0%B9%E6%9C%AC%E7%9A%84%E5%8A%9E%E6%B3%95"><span class="nav-number">3.2.</span> <span class="nav-text">最根本的办法</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#%E6%9C%80%E7%AE%80%E5%8D%95%E7%9A%84%E5%8A%9E%E6%B3%95"><span class="nav-number">3.3.</span> <span class="nav-text">最简单的办法</span></a></li></ol></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%90%8E%E7%BB%AD"><span class="nav-number">4.</span> <span class="nav-text">后续</span></a></li></ol></div>
+            
+
+          </div>
+        </section>
+      <!--/noindex-->
+      
+
+      
+
+    </div>
+  </aside>
+
+
+        
+      </div>
+    </main>
+
+    <footer id="footer" class="footer">
+      <div class="footer-inner">
+        <div class="copyright">&copy; <span itemprop="copyrightYear">2020</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">plpan</span>
+
+  
+</div>
+
+
+
+
+
+
+
+
+
+        
+
+
+
+
+
+
+
+        
+      </div>
+    </footer>
+
+    
+      <div class="back-to-top">
+        <i class="fa fa-arrow-up"></i>
+        
+      </div>
+    
+
+    
+
+  </div>
+
+  
+
+<script type="text/javascript">
+  if (Object.prototype.toString.call(window.Promise) !== '[object Function]') {
+    window.Promise = null;
+  }
+</script>
+
+
+
+
+
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+  
+  
+    <script type="text/javascript" src="/lib/jquery/index.js?v=2.1.3"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/fastclick/lib/fastclick.min.js?v=1.0.6"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/jquery_lazyload/jquery.lazyload.js?v=1.9.7"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/velocity/velocity.min.js?v=1.2.1"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/velocity/velocity.ui.min.js?v=1.2.1"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/fancybox/source/jquery.fancybox.pack.js?v=2.1.5"></script>
+  
+
+
+  
+
+
+  <script type="text/javascript" src="/js/src/utils.js?v=5.1.4"></script>
+
+  <script type="text/javascript" src="/js/src/motion.js?v=5.1.4"></script>
+
+
+
+  
+  
+
+  
+  <script type="text/javascript" src="/js/src/scrollspy.js?v=5.1.4"></script>
+<script type="text/javascript" src="/js/src/post-details.js?v=5.1.4"></script>
+
+
+
+  
+
+
+  <script type="text/javascript" src="/js/src/bootstrap.js?v=5.1.4"></script>
+
+
+
+  
+
+
+  
+
+
+
+
+	
+
+
+
+
+
+  
+
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  <script type="text/javascript">
+    // Popup Window;
+    var isfetched = false;
+    var isXml = true;
+    // Search DB path;
+    var search_path = "";
+    if (search_path.length === 0) {
+      search_path = "search.xml";
+    } else if (/json$/i.test(search_path)) {
+      isXml = false;
+    }
+    var path = "/" + search_path;
+    // monitor main search box;
+
+    var onPopupClose = function (e) {
+      $('.popup').hide();
+      $('#local-search-input').val('');
+      $('.search-result-list').remove();
+      $('#no-result').remove();
+      $(".local-search-pop-overlay").remove();
+      $('body').css('overflow', '');
+    }
+
+    function proceedsearch() {
+      $("body")
+        .append('<div class="search-popup-overlay local-search-pop-overlay"></div>')
+        .css('overflow', 'hidden');
+      $('.search-popup-overlay').click(onPopupClose);
+      $('.popup').toggle();
+      var $localSearchInput = $('#local-search-input');
+      $localSearchInput.attr("autocapitalize", "none");
+      $localSearchInput.attr("autocorrect", "off");
+      $localSearchInput.focus();
+    }
+
+    // search function;
+    var searchFunc = function(path, search_id, content_id) {
+      'use strict';
+
+      // start loading animation
+      $("body")
+        .append('<div class="search-popup-overlay local-search-pop-overlay">' +
+          '<div id="search-loading-icon">' +
+          '<i class="fa fa-spinner fa-pulse fa-5x fa-fw"></i>' +
+          '</div>' +
+          '</div>')
+        .css('overflow', 'hidden');
+      $("#search-loading-icon").css('margin', '20% auto 0 auto').css('text-align', 'center');
+
+      $.ajax({
+        url: path,
+        dataType: isXml ? "xml" : "json",
+        async: true,
+        success: function(res) {
+          // get the contents from search data
+          isfetched = true;
+          $('.popup').detach().appendTo('.header-inner');
+          var datas = isXml ? $("entry", res).map(function() {
+            return {
+              title: $("title", this).text(),
+              content: $("content",this).text(),
+              url: $("url" , this).text()
+            };
+          }).get() : res;
+          var input = document.getElementById(search_id);
+          var resultContent = document.getElementById(content_id);
+          var inputEventFunction = function() {
+            var searchText = input.value.trim().toLowerCase();
+            var keywords = searchText.split(/[\s\-]+/);
+            if (keywords.length > 1) {
+              keywords.push(searchText);
+            }
+            var resultItems = [];
+            if (searchText.length > 0) {
+              // perform local searching
+              datas.forEach(function(data) {
+                var isMatch = false;
+                var hitCount = 0;
+                var searchTextCount = 0;
+                var title = data.title.trim();
+                var titleInLowerCase = title.toLowerCase();
+                var content = data.content.trim().replace(/<[^>]+>/g,"");
+                var contentInLowerCase = content.toLowerCase();
+                var articleUrl = decodeURIComponent(data.url);
+                var indexOfTitle = [];
+                var indexOfContent = [];
+                // only match articles with not empty titles
+                if(title != '') {
+                  keywords.forEach(function(keyword) {
+                    function getIndexByWord(word, text, caseSensitive) {
+                      var wordLen = word.length;
+                      if (wordLen === 0) {
+                        return [];
+                      }
+                      var startPosition = 0, position = [], index = [];
+                      if (!caseSensitive) {
+                        text = text.toLowerCase();
+                        word = word.toLowerCase();
+                      }
+                      while ((position = text.indexOf(word, startPosition)) > -1) {
+                        index.push({position: position, word: word});
+                        startPosition = position + wordLen;
+                      }
+                      return index;
+                    }
+
+                    indexOfTitle = indexOfTitle.concat(getIndexByWord(keyword, titleInLowerCase, false));
+                    indexOfContent = indexOfContent.concat(getIndexByWord(keyword, contentInLowerCase, false));
+                  });
+                  if (indexOfTitle.length > 0 || indexOfContent.length > 0) {
+                    isMatch = true;
+                    hitCount = indexOfTitle.length + indexOfContent.length;
+                  }
+                }
+
+                // show search results
+
+                if (isMatch) {
+                  // sort index by position of keyword
+
+                  [indexOfTitle, indexOfContent].forEach(function (index) {
+                    index.sort(function (itemLeft, itemRight) {
+                      if (itemRight.position !== itemLeft.position) {
+                        return itemRight.position - itemLeft.position;
+                      } else {
+                        return itemLeft.word.length - itemRight.word.length;
+                      }
+                    });
+                  });
+
+                  // merge hits into slices
+
+                  function mergeIntoSlice(text, start, end, index) {
+                    var item = index[index.length - 1];
+                    var position = item.position;
+                    var word = item.word;
+                    var hits = [];
+                    var searchTextCountInSlice = 0;
+                    while (position + word.length <= end && index.length != 0) {
+                      if (word === searchText) {
+                        searchTextCountInSlice++;
+                      }
+                      hits.push({position: position, length: word.length});
+                      var wordEnd = position + word.length;
+
+                      // move to next position of hit
+
+                      index.pop();
+                      while (index.length != 0) {
+                        item = index[index.length - 1];
+                        position = item.position;
+                        word = item.word;
+                        if (wordEnd > position) {
+                          index.pop();
+                        } else {
+                          break;
+                        }
+                      }
+                    }
+                    searchTextCount += searchTextCountInSlice;
+                    return {
+                      hits: hits,
+                      start: start,
+                      end: end,
+                      searchTextCount: searchTextCountInSlice
+                    };
+                  }
+
+                  var slicesOfTitle = [];
+                  if (indexOfTitle.length != 0) {
+                    slicesOfTitle.push(mergeIntoSlice(title, 0, title.length, indexOfTitle));
+                  }
+
+                  var slicesOfContent = [];
+                  while (indexOfContent.length != 0) {
+                    var item = indexOfContent[indexOfContent.length - 1];
+                    var position = item.position;
+                    var word = item.word;
+                    // cut out 100 characters
+                    var start = position - 20;
+                    var end = position + 80;
+                    if(start < 0){
+                      start = 0;
+                    }
+                    if (end < position + word.length) {
+                      end = position + word.length;
+                    }
+                    if(end > content.length){
+                      end = content.length;
+                    }
+                    slicesOfContent.push(mergeIntoSlice(content, start, end, indexOfContent));
+                  }
+
+                  // sort slices in content by search text's count and hits' count
+
+                  slicesOfContent.sort(function (sliceLeft, sliceRight) {
+                    if (sliceLeft.searchTextCount !== sliceRight.searchTextCount) {
+                      return sliceRight.searchTextCount - sliceLeft.searchTextCount;
+                    } else if (sliceLeft.hits.length !== sliceRight.hits.length) {
+                      return sliceRight.hits.length - sliceLeft.hits.length;
+                    } else {
+                      return sliceLeft.start - sliceRight.start;
+                    }
+                  });
+
+                  // select top N slices in content
+
+                  var upperBound = parseInt('1');
+                  if (upperBound >= 0) {
+                    slicesOfContent = slicesOfContent.slice(0, upperBound);
+                  }
+
+                  // highlight title and content
+
+                  function highlightKeyword(text, slice) {
+                    var result = '';
+                    var prevEnd = slice.start;
+                    slice.hits.forEach(function (hit) {
+                      result += text.substring(prevEnd, hit.position);
+                      var end = hit.position + hit.length;
+                      result += '<b class="search-keyword">' + text.substring(hit.position, end) + '</b>';
+                      prevEnd = end;
+                    });
+                    result += text.substring(prevEnd, slice.end);
+                    return result;
+                  }
+
+                  var resultItem = '';
+
+                  if (slicesOfTitle.length != 0) {
+                    resultItem += "<li><a href='" + articleUrl + "' class='search-result-title'>" + highlightKeyword(title, slicesOfTitle[0]) + "</a>";
+                  } else {
+                    resultItem += "<li><a href='" + articleUrl + "' class='search-result-title'>" + title + "</a>";
+                  }
+
+                  slicesOfContent.forEach(function (slice) {
+                    resultItem += "<a href='" + articleUrl + "'>" +
+                      "<p class=\"search-result\">" + highlightKeyword(content, slice) +
+                      "...</p>" + "</a>";
+                  });
+
+                  resultItem += "</li>";
+                  resultItems.push({
+                    item: resultItem,
+                    searchTextCount: searchTextCount,
+                    hitCount: hitCount,
+                    id: resultItems.length
+                  });
+                }
+              })
+            };
+            if (keywords.length === 1 && keywords[0] === "") {
+              resultContent.innerHTML = '<div id="no-result"><i class="fa fa-search fa-5x" /></div>'
+            } else if (resultItems.length === 0) {
+              resultContent.innerHTML = '<div id="no-result"><i class="fa fa-frown-o fa-5x" /></div>'
+            } else {
+              resultItems.sort(function (resultLeft, resultRight) {
+                if (resultLeft.searchTextCount !== resultRight.searchTextCount) {
+                  return resultRight.searchTextCount - resultLeft.searchTextCount;
+                } else if (resultLeft.hitCount !== resultRight.hitCount) {
+                  return resultRight.hitCount - resultLeft.hitCount;
+                } else {
+                  return resultRight.id - resultLeft.id;
+                }
+              });
+              var searchResultList = '<ul class=\"search-result-list\">';
+              resultItems.forEach(function (result) {
+                searchResultList += result.item;
+              })
+              searchResultList += "</ul>";
+              resultContent.innerHTML = searchResultList;
+            }
+          }
+
+          if ('auto' === 'auto') {
+            input.addEventListener('input', inputEventFunction);
+          } else {
+            $('.search-icon').click(inputEventFunction);
+            input.addEventListener('keypress', function (event) {
+              if (event.keyCode === 13) {
+                inputEventFunction();
+              }
+            });
+          }
+
+          // remove loading animation
+          $(".local-search-pop-overlay").remove();
+          $('body').css('overflow', '');
+
+          proceedsearch();
+        }
+      });
+    }
+
+    // handle and trigger popup window;
+    $('.popup-trigger').click(function(e) {
+      e.stopPropagation();
+      if (isfetched === false) {
+        searchFunc(path, 'local-search-input', 'local-search-result');
+      } else {
+        proceedsearch();
+      };
+    });
+
+    $('.popup-btn-close').click(onPopupClose);
+    $('.popup').click(function(e){
+      e.stopPropagation();
+    });
+    $(document).on('keyup', function (event) {
+      var shouldDismissSearchPopup = event.which === 27 &&
+        $('.search-popup').is(':visible');
+      if (shouldDismissSearchPopup) {
+        onPopupClose();
+      }
+    });
+  </script>
+
+
+
+
+
+  
+
+  
+
+  
+
+  
+  
+
+  
+
+  
+
+  
+
+</body>
+</html>

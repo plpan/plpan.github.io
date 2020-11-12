@@ -1,0 +1,1135 @@
+<!DOCTYPE html>
+
+
+
+  
+
+
+<html class="theme-next mist use-motion" lang="zh-Hans">
+<head>
+  <meta charset="UTF-8"/>
+<meta http-equiv="X-UA-Compatible" content="IE=edge" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1"/>
+<meta name="theme-color" content="#222">
+
+
+
+
+
+
+
+
+
+<meta http-equiv="Cache-Control" content="no-transform" />
+<meta http-equiv="Cache-Control" content="no-siteapp" />
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+  
+  <link href="/lib/fancybox/source/jquery.fancybox.css?v=2.1.5" rel="stylesheet" type="text/css" />
+
+
+
+
+
+
+
+<link href="/lib/font-awesome/css/font-awesome.min.css?v=4.6.2" rel="stylesheet" type="text/css" />
+
+<link href="/css/main.css?v=5.1.4" rel="stylesheet" type="text/css" />
+
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png?v=5.1.4">
+
+
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png?v=5.1.4">
+
+
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png?v=5.1.4">
+
+
+  <link rel="mask-icon" href="/images/logo.svg?v=5.1.4" color="#222">
+
+
+
+
+
+  <meta name="keywords" content="kubernetes,docker," />
+
+
+
+
+
+  <link rel="alternate" href="/atom.xml" title="Stupig" type="application/atom+xml" />
+
+
+
+
+
+
+<meta name="description" content="背景背景详见：docker-hang-死排查之旅。总结成一句话：runc非预期写pipe造成一系列组件的阻塞，当我们读pipe以消除阻塞时，发生了一个非预期的现象——宿主上所有的容器都被重建了。 再详细分析问题原因之前，我们先简单回顾下linux pipe的基础知识。 linux pipelinux pipe（也即管道），相信大家对它都不陌生，是一种典型的进程间通信机制。管道主要分为两类：命名管道">
+<meta property="og:type" content="article">
+<meta property="og:title" content="一次读 pipe 引发的血案">
+<meta property="og:url" content="https://plpan.github.io/%E4%B8%80%E6%AC%A1%E8%AF%BB-pipe-%E5%BC%95%E5%8F%91%E7%9A%84%E8%A1%80%E6%A1%88/index.html">
+<meta property="og:site_name" content="Stupig">
+<meta property="og:description" content="背景背景详见：docker-hang-死排查之旅。总结成一句话：runc非预期写pipe造成一系列组件的阻塞，当我们读pipe以消除阻塞时，发生了一个非预期的现象——宿主上所有的容器都被重建了。 再详细分析问题原因之前，我们先简单回顾下linux pipe的基础知识。 linux pipelinux pipe（也即管道），相信大家对它都不陌生，是一种典型的进程间通信机制。管道主要分为两类：命名管道">
+<meta property="og:locale">
+<meta property="article:published_time" content="2020-07-19T10:53:03.000Z">
+<meta property="article:modified_time" content="2020-11-12T01:23:48.062Z">
+<meta property="article:author" content="plpan">
+<meta property="article:tag" content="kubernetes">
+<meta property="article:tag" content="docker">
+<meta name="twitter:card" content="summary">
+
+
+
+<script type="text/javascript" id="hexo.configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    root: '',
+    scheme: 'Mist',
+    version: '5.1.4',
+    sidebar: {"position":"left","display":"always","offset":12,"b2t":false,"scrollpercent":false,"onmobile":false},
+    fancybox: true,
+    tabs: true,
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}},
+    duoshuo: {
+      userId: '0',
+      author: '博主'
+    },
+    algolia: {
+      applicationID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    }
+  };
+</script>
+
+
+
+  <link rel="canonical" href="https://plpan.github.io/一次读-pipe-引发的血案/"/>
+
+
+
+
+
+  <title>一次读 pipe 引发的血案 | Stupig</title>
+  
+
+
+
+
+
+
+
+
+<meta name="generator" content="Hexo 5.2.0"></head>
+
+<body itemscope itemtype="http://schema.org/WebPage" lang="zh-Hans">
+
+  
+  
+    
+  
+
+  <div class="container sidebar-position-left page-post-detail">
+    <div class="headband"></div>
+
+    <header id="header" class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-wrapper">
+  <div class="site-meta ">
+    
+
+    <div class="custom-logo-site-title">
+      <a href="/"  class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">Stupig</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+      
+        <p class="site-subtitle"></p>
+      
+  </div>
+
+  <div class="site-nav-toggle">
+    <button>
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+    </button>
+  </div>
+</div>
+
+<nav class="site-nav">
+  
+
+  
+    <ul id="menu" class="menu">
+      
+        
+        <li class="menu-item menu-item-home">
+          <a href="/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-question-circle"></i> <br />
+            
+            首页
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-archives">
+          <a href="/archives" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-question-circle"></i> <br />
+            
+            归档
+          </a>
+        </li>
+      
+
+      
+        <li class="menu-item menu-item-search">
+          
+            <a href="javascript:;" class="popup-trigger">
+          
+            
+              <i class="menu-item-icon fa fa-search fa-fw"></i> <br />
+            
+            搜索
+          </a>
+        </li>
+      
+    </ul>
+  
+
+  
+    <div class="site-search">
+      
+  <div class="popup search-popup local-search-popup">
+  <div class="local-search-header clearfix">
+    <span class="search-icon">
+      <i class="fa fa-search"></i>
+    </span>
+    <span class="popup-btn-close">
+      <i class="fa fa-times-circle"></i>
+    </span>
+    <div class="local-search-input-wrapper">
+      <input autocomplete="off"
+             placeholder="搜索..." spellcheck="false"
+             type="text" id="local-search-input">
+    </div>
+  </div>
+  <div id="local-search-result"></div>
+</div>
+
+
+
+    </div>
+  
+</nav>
+
+
+
+ </div>
+    </header>
+
+    <main id="main" class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          <div id="content" class="content">
+            
+
+  <div id="posts" class="posts-expand">
+    
+
+  
+
+  
+  
+  
+
+  <article class="post post-type-normal" itemscope itemtype="http://schema.org/Article">
+  
+  
+  
+  <div class="post-block">
+    <link itemprop="mainEntityOfPage" href="https://plpan.github.io/%E4%B8%80%E6%AC%A1%E8%AF%BB-pipe-%E5%BC%95%E5%8F%91%E7%9A%84%E8%A1%80%E6%A1%88/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="name" content="">
+      <meta itemprop="description" content="">
+      <meta itemprop="image" content="/images/avatar.gif">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Stupig">
+    </span>
+
+    
+      <header class="post-header">
+
+        
+        
+          <h1 class="post-title" itemprop="name headline">一次读 pipe 引发的血案</h1>
+        
+
+        <div class="post-meta">
+          <span class="post-time">
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">发表于</span>
+              
+              <time title="创建于" itemprop="dateCreated datePublished" datetime="2020-07-19T18:53:03+08:00">
+                2020-07-19
+              </time>
+            
+
+            
+
+            
+          </span>
+
+          
+            <span class="post-category" >
+            
+              <span class="post-meta-divider">|</span>
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">分类于</span>
+              
+              
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/%E9%97%AE%E9%A2%98%E6%8E%92%E6%9F%A5/" itemprop="url" rel="index">
+                    <span itemprop="name">问题排查</span>
+                  </a>
+                </span>
+
+                
+                
+              
+            </span>
+          
+
+          
+            
+          
+
+          
+          
+
+          
+
+          
+
+          
+
+        </div>
+      </header>
+    
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+      
+
+      
+        <h3 id="背景"><a href="#背景" class="headerlink" title="背景"></a>背景</h3><p>背景详见：<a href="https://plpan.github.io/2020/07/17/docker-hang-%E6%AD%BB%E6%8E%92%E6%9F%A5%E4%B9%8B%E6%97%85/">docker-hang-死排查之旅</a>。总结成一句话：runc非预期写pipe造成一系列组件的阻塞，当我们读pipe以消除阻塞时，发生了一个非预期的现象——宿主上所有的容器都被重建了。</p>
+<p>再详细分析问题原因之前，我们先简单回顾下linux pipe的基础知识。</p>
+<h3 id="linux-pipe"><a href="#linux-pipe" class="headerlink" title="linux pipe"></a>linux pipe</h3><p>linux pipe（也即管道），相信大家对它都不陌生，是一种典型的进程间通信机制。管道主要分为两类：命名管道与匿名管道。其区别在于：</p>
+<ul>
+<li>命名管道：管道以文件形式存储在文件系统之上，系统中的任意两个进程都可以借助命名管道通信</li>
+<li>匿名管道：管道不以文件形式存储在文件系统之上，仅存储在进程的文件描述符表中，只有具有血缘关系的进程直接才能借助管道通信，如父子进程、子子进程、祖孙进程等</li>
+</ul>
+<p>管道可以被想象成一个固定大小的文件，分为读写两端，阻塞型管道读写有如下特点：</p>
+<ul>
+<li>读端：当管道内无数据时，读操作阻塞，直到有数据写入，或者所有写段关闭</li>
+<li>写段：当管道已被写满时，写操作阻塞，直到数据被读出</li>
+</ul>
+<p>linux pipe默认大小为16内存页[ref.2]，也即65536字节。</p>
+<p>这里我有一个小疑惑：写pipe超过65536字节才会被阻塞，我们在宿主上也验证了这个结论，但是<a href="https://plpan.github.io/2020/07/17/docker-hang-%E6%AD%BB%E6%8E%92%E6%9F%A5%E4%B9%8B%E6%97%85/">docker-hang-死排查之旅</a>写入5378字符时就已被阻塞。欢迎了解的小伙伴解惑。</p>
+<h3 id="血案发生"><a href="#血案发生" class="headerlink" title="血案发生"></a>血案发生</h3><p>由于runc init非预期往pipe里写入大量数据而引起阻塞，我们消除阻塞的做法很简单，人为读取pipe中的内容。当我们读取完pipe中的内容时，原本一切都应该按照我们的预期发展：收集到runc init非预期写pipe的真正原因；异常容器恢复响应。确实，以上两点都如我们预期的发生了，然而，此时还发生了一个非预期的动作：宿主上所有容器都被重建了。</p>
+<p>一个线上事故就此发生。原本其他线上容器运行正常，当我们解决docker hang死问题时，却引起了其他容器的一次重建，这显然是不可接受的。</p>
+<h3 id="问题定位"><a href="#问题定位" class="headerlink" title="问题定位"></a>问题定位</h3><p>我们的第一嫌犯是docker，怀疑宿主docker服务发生了重启。当我们验证docker服务状态时，排除了docker的嫌疑，因为docker上一次重启时间是好多天前。</p>
+<p>既然不是docker，那基本就是kubernetes了。kubernetes组件又分为master端与node端两大类。node端组件仅有kubelet，但是kubelet的嫌疑很小，因为它就是个打工仔，所有事情都是听从master的安排。而master端组件有三：控制器、调度器，与API服务。由于调度器包含驱逐功能，原本调度器嫌疑最大，但是因为我们线上关闭了驱逐功能，因此也基本不可能是调度器搞的鬼；而API服务则是被动的接收变更请求，也能排除嫌疑；那么嫌疑犯只剩下控制器了，控制器为什么要重建宿主上的所有容器呢？</p>
+<p>以上是我们的猜测环节，为了验证猜测正确与否，我们必须收集证据。证据何在？基本就埋没在海量的组件日志中。天网恢恢疏而不漏，在控制器日志中，我们掌握了它犯罪的关键证据：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">/<span class="keyword">var</span>/log/kubernetes/kube-controller-manager.root.log.INFO<span class="number">.20200712</span><span class="number">-014245.35913</span>:I0712 <span class="number">03</span>:<span class="number">19</span>:<span class="number">59.590703</span>   <span class="number">35913</span> controller_utils.<span class="keyword">go</span>:<span class="number">95</span>] Starting deletion of pod <span class="keyword">default</span>/kproxy-sf<span class="number">-69466</span><span class="number">-1</span></span><br></pre></td></tr></table></figure>
+
+<p>我们在0709发现宿主docker异常，而控制器在0712主动删除了宿主上的容器。证据在手，我们就开始审问控制器，它的交代入下：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// DeletePods will delete all pods from master running on given node,</span></span><br><span class="line"><span class="comment">// and return true if any pods were deleted, or were found pending</span></span><br><span class="line"><span class="comment">// deletion.</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">DeletePods</span><span class="params">(kubeClient clientset.Interface, recorder record.EventRecorder, nodeName, nodeUID <span class="keyword">string</span>, daemonStore extensionslisters.DaemonSetLister)</span> <span class="params">(<span class="keyword">bool</span>, error)</span></span> &#123;</span><br><span class="line">	......</span><br><span class="line">	<span class="keyword">for</span> _, pod := <span class="keyword">range</span> pods.Items &#123;</span><br><span class="line">		......</span><br><span class="line">		glog.V(<span class="number">2</span>).Infof(<span class="string">&quot;Starting deletion of pod %v/%v&quot;</span>, pod.Namespace, pod.Name)</span><br><span class="line">		<span class="keyword">if</span> err := kubeClient.CoreV1().Pods(pod.Namespace).Delete(pod.Name, <span class="literal">nil</span>); err != <span class="literal">nil</span> &#123;</span><br><span class="line">			<span class="keyword">return</span> <span class="literal">false</span>, err</span><br><span class="line">		&#125;</span><br><span class="line">		remaining = <span class="literal">true</span></span><br><span class="line">	&#125;</span><br><span class="line">  ......</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(nc *Controller)</span> <span class="title">doEvictionPass</span><span class="params">()</span></span> &#123;</span><br><span class="line">	nc.evictorLock.Lock()</span><br><span class="line">	<span class="keyword">defer</span> nc.evictorLock.Unlock()</span><br><span class="line">	<span class="keyword">for</span> k := <span class="keyword">range</span> nc.zonePodEvictor &#123;</span><br><span class="line">		<span class="comment">// Function should return &#x27;false&#x27; and a time after which it should be retried, or &#x27;true&#x27; if it shouldn&#x27;t (it succeeded).</span></span><br><span class="line">		nc.zonePodEvictor[k].Try(<span class="function"><span class="keyword">func</span><span class="params">(value scheduler.TimedValue)</span> <span class="params">(<span class="keyword">bool</span>, time.Duration)</span></span> &#123;</span><br><span class="line">			......</span><br><span class="line">			remaining, err := nodeutil.DeletePods(nc.kubeClient, nc.recorder, value.Value, nodeUID, nc.daemonSetStore)</span><br><span class="line">			......</span><br><span class="line">		&#125;)</span><br><span class="line">	&#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">// Run starts an asynchronous loop that monitors the status of cluster nodes.</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(nc *Controller)</span> <span class="title">Run</span><span class="params">(stopCh &lt;-<span class="keyword">chan</span> <span class="keyword">struct</span>&#123;&#125;)</span></span> &#123;</span><br><span class="line">	  ......</span><br><span class="line">		<span class="comment">// Managing eviction of nodes:</span></span><br><span class="line">		<span class="comment">// When we delete pods off a node, if the node was not empty at the time we then</span></span><br><span class="line">		<span class="comment">// queue an eviction watcher. If we hit an error, retry deletion.</span></span><br><span class="line">		<span class="keyword">go</span> wait.Until(nc.doEvictionPass, scheduler.NodeEvictionPeriod, stopCh)</span><br><span class="line">    ......</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>这个控制器就是node_lifecycle_controller，也即宿主生命周期控制器，该控制器定时 (每100ms) 驱逐宿主上的容器。这个控制器并非不分青红皂白就一通乱杀，不然线上早就乱套了，我们再来看看其判断条件：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// monitorNodeStatus verifies node status are constantly updated by kubelet, and if not,</span></span><br><span class="line"><span class="comment">// post &quot;NodeReady==ConditionUnknown&quot;. It also evicts all pods if node is not ready or</span></span><br><span class="line"><span class="comment">// not reachable for a long period of time.</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(nc *Controller)</span> <span class="title">monitorNodeStatus</span><span class="params">()</span> <span class="title">error</span></span> &#123;</span><br><span class="line">  ......</span><br><span class="line">  <span class="keyword">if</span> currentReadyCondition != <span class="literal">nil</span> &#123;</span><br><span class="line">			<span class="comment">// Check eviction timeout against decisionTimestamp</span></span><br><span class="line">			<span class="keyword">if</span> observedReadyCondition.Status == v1.ConditionFalse &#123;</span><br><span class="line">					<span class="keyword">if</span> decisionTimestamp.After(nc.nodeStatusMap[node.Name].readyTransitionTimestamp.Add(nc.podEvictionTimeout)) &#123;</span><br><span class="line">						<span class="keyword">if</span> nc.evictPods(node) &#123;</span><br><span class="line">							glog.V(<span class="number">2</span>).Infof(<span class="string">&quot;Node is NotReady. Adding Pods on Node %s to eviction queue: %v is later than %v + %v&quot;</span>,</span><br><span class="line">								node.Name,</span><br><span class="line">								decisionTimestamp,</span><br><span class="line">								nc.nodeStatusMap[node.Name].readyTransitionTimestamp,</span><br><span class="line">								nc.podEvictionTimeout,</span><br><span class="line">							)</span><br><span class="line">						&#125;</span><br><span class="line">					&#125;</span><br><span class="line">			&#125;</span><br><span class="line">			<span class="keyword">if</span> observedReadyCondition.Status == v1.ConditionUnknown &#123;</span><br><span class="line">					<span class="keyword">if</span> decisionTimestamp.After(nc.nodeStatusMap[node.Name].probeTimestamp.Add(nc.podEvictionTimeout)) &#123;</span><br><span class="line">						<span class="keyword">if</span> nc.evictPods(node) &#123;</span><br><span class="line">							glog.V(<span class="number">2</span>).Infof(<span class="string">&quot;Node is unresponsive. Adding Pods on Node %s to eviction queues: %v is later than %v + %v&quot;</span>,</span><br><span class="line">								node.Name,</span><br><span class="line">								decisionTimestamp,</span><br><span class="line">								nc.nodeStatusMap[node.Name].readyTransitionTimestamp,</span><br><span class="line">								nc.podEvictionTimeout-gracePeriod,</span><br><span class="line">							)</span><br><span class="line">						&#125;</span><br><span class="line">					&#125;</span><br><span class="line">			&#125;</span><br><span class="line">  &#125;</span><br><span class="line">  ......</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(nc *Controller)</span> <span class="title">evictPods</span><span class="params">(node *v1.Node)</span> <span class="title">bool</span></span> &#123;</span><br><span class="line">	nc.evictorLock.Lock()</span><br><span class="line">	<span class="keyword">defer</span> nc.evictorLock.Unlock()</span><br><span class="line">	<span class="keyword">return</span> nc.zonePodEvictor[utilnode.GetZoneKey(node)].Add(node.Name, <span class="keyword">string</span>(node.UID))</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>可见，控制器驱逐该宿主上的所有Pod的条件有二：</p>
+<ol>
+<li>宿主的状态为NotReady或者Unknown</li>
+<li>宿主状态保持非Ready超过指定时间阈值。该时间阈值由nc.podEvictionTimeout定义，默认为5分钟，我们的线上集群将其定制为2000分钟</li>
+</ol>
+<p>在<a href="https://plpan.github.io/2020/07/18/docker-hang-%E6%AD%BB%E9%98%BB%E5%A1%9E-kubelet-%E5%88%9D%E5%A7%8B%E5%8C%96%E6%B5%81%E7%A8%8B/">docker-hang-死阻塞-kubelet-初始化流程</a>中，我们提到由于docker hang死，kubelet初始化流程被阻塞，宿主状态为NotReady，命中条件1；我们检查kubelet NotReady的起始时间为2020-07-10 17:58:59，与控制器删除Pod的时间间隔基本为2000分钟，命中条件2。</p>
+<p>至此，本问题基本已盖棺定论：由于线上宿主状态非Ready持续时间太长，引起控制器驱逐宿主上所有容器导致。</p>
+<h3 id="思考"><a href="#思考" class="headerlink" title="思考"></a>思考</h3><p>清楚了其原理之后，大家再来思考一个问题：当宿主状态非Ready时，无法处理控制器发出的驱逐容器的请求，当且仅当宿主状态变成Ready之后，才能开始处理。既然宿主已恢复，是否还有必要立即驱逐其上的所有容器？尤其是针对有状态服务，删除Pod之后，立马又在原宿主创建该Pod。我个人感觉非但没有必要，而且还存在一定风险。</p>
+<p>针对控制器的驱逐策略，我们调大了线上的驱逐时间间隔，从原来的2000分钟，调整为3年。</p>
+<h3 id="Reference"><a href="#Reference" class="headerlink" title="Reference"></a>Reference</h3><ol>
+<li><a target="_blank" rel="noopener" href="https://elixir.bootlin.com/linux/v3.10/source/fs/pipe.c#L496">https://elixir.bootlin.com/linux/v3.10/source/fs/pipe.c#L496</a></li>
+<li><a target="_blank" rel="noopener" href="https://elixir.bootlin.com/linux/v3.10/source/include/linux/pipe_fs_i.h#L4">https://elixir.bootlin.com/linux/v3.10/source/include/linux/pipe_fs_i.h#L4</a></li>
+</ol>
+
+      
+    </div>
+    
+    
+    
+
+    
+
+    
+      <div>
+        <div style="padding: 10px 0; margin: 20px auto; width: 90%; text-align: center;">
+  <div></div>
+  <button id="rewardButton" disable="enable" onclick="var qr = document.getElementById('QR'); if (qr.style.display === 'none') {qr.style.display='block';} else {qr.style.display='none'}">
+    <span>打赏</span>
+  </button>
+  <div id="QR" style="display: none;">
+
+    
+      <div id="wechat" style="display: inline-block">
+        <img id="wechat_qr" src="/images/wechatpay.png" alt=" 微信支付"/>
+        <p>微信支付</p>
+      </div>
+    
+
+    
+
+    
+
+  </div>
+</div>
+
+      </div>
+    
+
+    
+
+    <footer class="post-footer">
+      
+        <div class="post-tags">
+          
+            <a href="/tags/kubernetes/" rel="tag"># kubernetes</a>
+          
+            <a href="/tags/docker/" rel="tag"># docker</a>
+          
+        </div>
+      
+
+      
+      
+      
+
+      
+        <div class="post-nav">
+          <div class="post-nav-next post-nav-item">
+            
+              <a href="/docker-hang-%E6%AD%BB%E9%98%BB%E5%A1%9E-kubelet-%E5%88%9D%E5%A7%8B%E5%8C%96%E6%B5%81%E7%A8%8B/" rel="next" title="docker hang 死阻塞 kubelet 初始化流程">
+                <i class="fa fa-chevron-left"></i> docker hang 死阻塞 kubelet 初始化流程
+              </a>
+            
+          </div>
+
+          <span class="post-nav-divider"></span>
+
+          <div class="post-nav-prev post-nav-item">
+            
+              <a href="/pod-terminating-%E6%8E%92%E6%9F%A5%E4%B9%8B%E6%97%85/" rel="prev" title="pod terminating 排查之旅">
+                pod terminating 排查之旅 <i class="fa fa-chevron-right"></i>
+              </a>
+            
+          </div>
+        </div>
+      
+
+      
+      
+    </footer>
+  </div>
+  
+  
+  
+  </article>
+
+
+
+    <div class="post-spread">
+      
+    </div>
+  </div>
+
+
+          </div>
+          
+
+
+          
+
+  
+
+
+
+        </div>
+        
+          
+  
+  <div class="sidebar-toggle">
+    <div class="sidebar-toggle-line-wrap">
+      <span class="sidebar-toggle-line sidebar-toggle-line-first"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-middle"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-last"></span>
+    </div>
+  </div>
+
+  <aside id="sidebar" class="sidebar">
+    
+    <div class="sidebar-inner">
+
+      
+
+      
+        <ul class="sidebar-nav motion-element">
+          <li class="sidebar-nav-toc sidebar-nav-active" data-target="post-toc-wrap">
+            文章目录
+          </li>
+          <li class="sidebar-nav-overview" data-target="site-overview-wrap">
+            站点概览
+          </li>
+        </ul>
+      
+
+      <section class="site-overview-wrap sidebar-panel">
+        <div class="site-overview">
+          <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+            
+              <p class="site-author-name" itemprop="name"></p>
+              <p class="site-description motion-element" itemprop="description"></p>
+          </div>
+
+          <nav class="site-state motion-element">
+
+            
+              <div class="site-state-item site-state-posts">
+              
+                <a href="/archives">
+              
+                  <span class="site-state-item-count">7</span>
+                  <span class="site-state-item-name">日志</span>
+                </a>
+              </div>
+            
+
+            
+              
+              
+              <div class="site-state-item site-state-categories">
+                
+                  <span class="site-state-item-count">2</span>
+                  <span class="site-state-item-name">分类</span>
+                
+              </div>
+            
+
+            
+              
+              
+              <div class="site-state-item site-state-tags">
+                
+                  <span class="site-state-item-count">8</span>
+                  <span class="site-state-item-name">标签</span>
+                
+              </div>
+            
+
+          </nav>
+
+          
+            <div class="feed-link motion-element">
+              <a href="/atom.xml" rel="alternate">
+                <i class="fa fa-rss"></i>
+                RSS
+              </a>
+            </div>
+          
+
+          
+            <div class="links-of-author motion-element">
+                
+                  <span class="links-of-author-item">
+                    <a href="https://github.com/plpan" target="_blank" title="GitHub">
+                      GitHub</a>
+                  </span>
+                
+            </div>
+          
+
+          
+          
+
+          
+          
+
+          
+
+        </div>
+      </section>
+
+      
+      <!--noindex-->
+        <section class="post-toc-wrap motion-element sidebar-panel sidebar-panel-active">
+          <div class="post-toc">
+
+            
+              
+            
+
+            
+              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E8%83%8C%E6%99%AF"><span class="nav-number">1.</span> <span class="nav-text">背景</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#linux-pipe"><span class="nav-number">2.</span> <span class="nav-text">linux pipe</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E8%A1%80%E6%A1%88%E5%8F%91%E7%94%9F"><span class="nav-number">3.</span> <span class="nav-text">血案发生</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E9%97%AE%E9%A2%98%E5%AE%9A%E4%BD%8D"><span class="nav-number">4.</span> <span class="nav-text">问题定位</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E6%80%9D%E8%80%83"><span class="nav-number">5.</span> <span class="nav-text">思考</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#Reference"><span class="nav-number">6.</span> <span class="nav-text">Reference</span></a></li></ol></div>
+            
+
+          </div>
+        </section>
+      <!--/noindex-->
+      
+
+      
+
+    </div>
+  </aside>
+
+
+        
+      </div>
+    </main>
+
+    <footer id="footer" class="footer">
+      <div class="footer-inner">
+        <div class="copyright">&copy; <span itemprop="copyrightYear">2020</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">plpan</span>
+
+  
+</div>
+
+
+
+
+
+
+
+
+
+        
+
+
+
+
+
+
+
+        
+      </div>
+    </footer>
+
+    
+      <div class="back-to-top">
+        <i class="fa fa-arrow-up"></i>
+        
+      </div>
+    
+
+    
+
+  </div>
+
+  
+
+<script type="text/javascript">
+  if (Object.prototype.toString.call(window.Promise) !== '[object Function]') {
+    window.Promise = null;
+  }
+</script>
+
+
+
+
+
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+  
+  
+    <script type="text/javascript" src="/lib/jquery/index.js?v=2.1.3"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/fastclick/lib/fastclick.min.js?v=1.0.6"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/jquery_lazyload/jquery.lazyload.js?v=1.9.7"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/velocity/velocity.min.js?v=1.2.1"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/velocity/velocity.ui.min.js?v=1.2.1"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/fancybox/source/jquery.fancybox.pack.js?v=2.1.5"></script>
+  
+
+
+  
+
+
+  <script type="text/javascript" src="/js/src/utils.js?v=5.1.4"></script>
+
+  <script type="text/javascript" src="/js/src/motion.js?v=5.1.4"></script>
+
+
+
+  
+  
+
+  
+  <script type="text/javascript" src="/js/src/scrollspy.js?v=5.1.4"></script>
+<script type="text/javascript" src="/js/src/post-details.js?v=5.1.4"></script>
+
+
+
+  
+
+
+  <script type="text/javascript" src="/js/src/bootstrap.js?v=5.1.4"></script>
+
+
+
+  
+
+
+  
+
+
+
+
+	
+
+
+
+
+
+  
+
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  <script type="text/javascript">
+    // Popup Window;
+    var isfetched = false;
+    var isXml = true;
+    // Search DB path;
+    var search_path = "";
+    if (search_path.length === 0) {
+      search_path = "search.xml";
+    } else if (/json$/i.test(search_path)) {
+      isXml = false;
+    }
+    var path = "/" + search_path;
+    // monitor main search box;
+
+    var onPopupClose = function (e) {
+      $('.popup').hide();
+      $('#local-search-input').val('');
+      $('.search-result-list').remove();
+      $('#no-result').remove();
+      $(".local-search-pop-overlay").remove();
+      $('body').css('overflow', '');
+    }
+
+    function proceedsearch() {
+      $("body")
+        .append('<div class="search-popup-overlay local-search-pop-overlay"></div>')
+        .css('overflow', 'hidden');
+      $('.search-popup-overlay').click(onPopupClose);
+      $('.popup').toggle();
+      var $localSearchInput = $('#local-search-input');
+      $localSearchInput.attr("autocapitalize", "none");
+      $localSearchInput.attr("autocorrect", "off");
+      $localSearchInput.focus();
+    }
+
+    // search function;
+    var searchFunc = function(path, search_id, content_id) {
+      'use strict';
+
+      // start loading animation
+      $("body")
+        .append('<div class="search-popup-overlay local-search-pop-overlay">' +
+          '<div id="search-loading-icon">' +
+          '<i class="fa fa-spinner fa-pulse fa-5x fa-fw"></i>' +
+          '</div>' +
+          '</div>')
+        .css('overflow', 'hidden');
+      $("#search-loading-icon").css('margin', '20% auto 0 auto').css('text-align', 'center');
+
+      $.ajax({
+        url: path,
+        dataType: isXml ? "xml" : "json",
+        async: true,
+        success: function(res) {
+          // get the contents from search data
+          isfetched = true;
+          $('.popup').detach().appendTo('.header-inner');
+          var datas = isXml ? $("entry", res).map(function() {
+            return {
+              title: $("title", this).text(),
+              content: $("content",this).text(),
+              url: $("url" , this).text()
+            };
+          }).get() : res;
+          var input = document.getElementById(search_id);
+          var resultContent = document.getElementById(content_id);
+          var inputEventFunction = function() {
+            var searchText = input.value.trim().toLowerCase();
+            var keywords = searchText.split(/[\s\-]+/);
+            if (keywords.length > 1) {
+              keywords.push(searchText);
+            }
+            var resultItems = [];
+            if (searchText.length > 0) {
+              // perform local searching
+              datas.forEach(function(data) {
+                var isMatch = false;
+                var hitCount = 0;
+                var searchTextCount = 0;
+                var title = data.title.trim();
+                var titleInLowerCase = title.toLowerCase();
+                var content = data.content.trim().replace(/<[^>]+>/g,"");
+                var contentInLowerCase = content.toLowerCase();
+                var articleUrl = decodeURIComponent(data.url);
+                var indexOfTitle = [];
+                var indexOfContent = [];
+                // only match articles with not empty titles
+                if(title != '') {
+                  keywords.forEach(function(keyword) {
+                    function getIndexByWord(word, text, caseSensitive) {
+                      var wordLen = word.length;
+                      if (wordLen === 0) {
+                        return [];
+                      }
+                      var startPosition = 0, position = [], index = [];
+                      if (!caseSensitive) {
+                        text = text.toLowerCase();
+                        word = word.toLowerCase();
+                      }
+                      while ((position = text.indexOf(word, startPosition)) > -1) {
+                        index.push({position: position, word: word});
+                        startPosition = position + wordLen;
+                      }
+                      return index;
+                    }
+
+                    indexOfTitle = indexOfTitle.concat(getIndexByWord(keyword, titleInLowerCase, false));
+                    indexOfContent = indexOfContent.concat(getIndexByWord(keyword, contentInLowerCase, false));
+                  });
+                  if (indexOfTitle.length > 0 || indexOfContent.length > 0) {
+                    isMatch = true;
+                    hitCount = indexOfTitle.length + indexOfContent.length;
+                  }
+                }
+
+                // show search results
+
+                if (isMatch) {
+                  // sort index by position of keyword
+
+                  [indexOfTitle, indexOfContent].forEach(function (index) {
+                    index.sort(function (itemLeft, itemRight) {
+                      if (itemRight.position !== itemLeft.position) {
+                        return itemRight.position - itemLeft.position;
+                      } else {
+                        return itemLeft.word.length - itemRight.word.length;
+                      }
+                    });
+                  });
+
+                  // merge hits into slices
+
+                  function mergeIntoSlice(text, start, end, index) {
+                    var item = index[index.length - 1];
+                    var position = item.position;
+                    var word = item.word;
+                    var hits = [];
+                    var searchTextCountInSlice = 0;
+                    while (position + word.length <= end && index.length != 0) {
+                      if (word === searchText) {
+                        searchTextCountInSlice++;
+                      }
+                      hits.push({position: position, length: word.length});
+                      var wordEnd = position + word.length;
+
+                      // move to next position of hit
+
+                      index.pop();
+                      while (index.length != 0) {
+                        item = index[index.length - 1];
+                        position = item.position;
+                        word = item.word;
+                        if (wordEnd > position) {
+                          index.pop();
+                        } else {
+                          break;
+                        }
+                      }
+                    }
+                    searchTextCount += searchTextCountInSlice;
+                    return {
+                      hits: hits,
+                      start: start,
+                      end: end,
+                      searchTextCount: searchTextCountInSlice
+                    };
+                  }
+
+                  var slicesOfTitle = [];
+                  if (indexOfTitle.length != 0) {
+                    slicesOfTitle.push(mergeIntoSlice(title, 0, title.length, indexOfTitle));
+                  }
+
+                  var slicesOfContent = [];
+                  while (indexOfContent.length != 0) {
+                    var item = indexOfContent[indexOfContent.length - 1];
+                    var position = item.position;
+                    var word = item.word;
+                    // cut out 100 characters
+                    var start = position - 20;
+                    var end = position + 80;
+                    if(start < 0){
+                      start = 0;
+                    }
+                    if (end < position + word.length) {
+                      end = position + word.length;
+                    }
+                    if(end > content.length){
+                      end = content.length;
+                    }
+                    slicesOfContent.push(mergeIntoSlice(content, start, end, indexOfContent));
+                  }
+
+                  // sort slices in content by search text's count and hits' count
+
+                  slicesOfContent.sort(function (sliceLeft, sliceRight) {
+                    if (sliceLeft.searchTextCount !== sliceRight.searchTextCount) {
+                      return sliceRight.searchTextCount - sliceLeft.searchTextCount;
+                    } else if (sliceLeft.hits.length !== sliceRight.hits.length) {
+                      return sliceRight.hits.length - sliceLeft.hits.length;
+                    } else {
+                      return sliceLeft.start - sliceRight.start;
+                    }
+                  });
+
+                  // select top N slices in content
+
+                  var upperBound = parseInt('1');
+                  if (upperBound >= 0) {
+                    slicesOfContent = slicesOfContent.slice(0, upperBound);
+                  }
+
+                  // highlight title and content
+
+                  function highlightKeyword(text, slice) {
+                    var result = '';
+                    var prevEnd = slice.start;
+                    slice.hits.forEach(function (hit) {
+                      result += text.substring(prevEnd, hit.position);
+                      var end = hit.position + hit.length;
+                      result += '<b class="search-keyword">' + text.substring(hit.position, end) + '</b>';
+                      prevEnd = end;
+                    });
+                    result += text.substring(prevEnd, slice.end);
+                    return result;
+                  }
+
+                  var resultItem = '';
+
+                  if (slicesOfTitle.length != 0) {
+                    resultItem += "<li><a href='" + articleUrl + "' class='search-result-title'>" + highlightKeyword(title, slicesOfTitle[0]) + "</a>";
+                  } else {
+                    resultItem += "<li><a href='" + articleUrl + "' class='search-result-title'>" + title + "</a>";
+                  }
+
+                  slicesOfContent.forEach(function (slice) {
+                    resultItem += "<a href='" + articleUrl + "'>" +
+                      "<p class=\"search-result\">" + highlightKeyword(content, slice) +
+                      "...</p>" + "</a>";
+                  });
+
+                  resultItem += "</li>";
+                  resultItems.push({
+                    item: resultItem,
+                    searchTextCount: searchTextCount,
+                    hitCount: hitCount,
+                    id: resultItems.length
+                  });
+                }
+              })
+            };
+            if (keywords.length === 1 && keywords[0] === "") {
+              resultContent.innerHTML = '<div id="no-result"><i class="fa fa-search fa-5x" /></div>'
+            } else if (resultItems.length === 0) {
+              resultContent.innerHTML = '<div id="no-result"><i class="fa fa-frown-o fa-5x" /></div>'
+            } else {
+              resultItems.sort(function (resultLeft, resultRight) {
+                if (resultLeft.searchTextCount !== resultRight.searchTextCount) {
+                  return resultRight.searchTextCount - resultLeft.searchTextCount;
+                } else if (resultLeft.hitCount !== resultRight.hitCount) {
+                  return resultRight.hitCount - resultLeft.hitCount;
+                } else {
+                  return resultRight.id - resultLeft.id;
+                }
+              });
+              var searchResultList = '<ul class=\"search-result-list\">';
+              resultItems.forEach(function (result) {
+                searchResultList += result.item;
+              })
+              searchResultList += "</ul>";
+              resultContent.innerHTML = searchResultList;
+            }
+          }
+
+          if ('auto' === 'auto') {
+            input.addEventListener('input', inputEventFunction);
+          } else {
+            $('.search-icon').click(inputEventFunction);
+            input.addEventListener('keypress', function (event) {
+              if (event.keyCode === 13) {
+                inputEventFunction();
+              }
+            });
+          }
+
+          // remove loading animation
+          $(".local-search-pop-overlay").remove();
+          $('body').css('overflow', '');
+
+          proceedsearch();
+        }
+      });
+    }
+
+    // handle and trigger popup window;
+    $('.popup-trigger').click(function(e) {
+      e.stopPropagation();
+      if (isfetched === false) {
+        searchFunc(path, 'local-search-input', 'local-search-result');
+      } else {
+        proceedsearch();
+      };
+    });
+
+    $('.popup-btn-close').click(onPopupClose);
+    $('.popup').click(function(e){
+      e.stopPropagation();
+    });
+    $(document).on('keyup', function (event) {
+      var shouldDismissSearchPopup = event.which === 27 &&
+        $('.search-popup').is(':visible');
+      if (shouldDismissSearchPopup) {
+        onPopupClose();
+      }
+    });
+  </script>
+
+
+
+
+
+  
+
+  
+
+  
+
+  
+  
+
+  
+
+  
+
+  
+
+</body>
+</html>

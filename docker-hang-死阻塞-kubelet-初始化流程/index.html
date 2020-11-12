@@ -1,0 +1,1149 @@
+<!DOCTYPE html>
+
+
+
+  
+
+
+<html class="theme-next mist use-motion" lang="zh-Hans">
+<head>
+  <meta charset="UTF-8"/>
+<meta http-equiv="X-UA-Compatible" content="IE=edge" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1"/>
+<meta name="theme-color" content="#222">
+
+
+
+
+
+
+
+
+
+<meta http-equiv="Cache-Control" content="no-transform" />
+<meta http-equiv="Cache-Control" content="no-siteapp" />
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+  
+  <link href="/lib/fancybox/source/jquery.fancybox.css?v=2.1.5" rel="stylesheet" type="text/css" />
+
+
+
+
+
+
+
+<link href="/lib/font-awesome/css/font-awesome.min.css?v=4.6.2" rel="stylesheet" type="text/css" />
+
+<link href="/css/main.css?v=5.1.4" rel="stylesheet" type="text/css" />
+
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png?v=5.1.4">
+
+
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png?v=5.1.4">
+
+
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png?v=5.1.4">
+
+
+  <link rel="mask-icon" href="/images/logo.svg?v=5.1.4" color="#222">
+
+
+
+
+
+  <meta name="keywords" content="kubernetes,docker," />
+
+
+
+
+
+  <link rel="alternate" href="/atom.xml" title="Stupig" type="application/atom+xml" />
+
+
+
+
+
+
+<meta name="description" content="背景最近升级了一版kubelet，修复因kubelet删除Sidecar类型Pod慢导致平台删除集群超时的问题。在灰度redis隔离集群的时候，发现升级kubelet并重启服务后，少量宿主状态变成了NotReady，并且回滚kubelet至之前版本，宿主状态仍然是NotReady。查看宿主状态时提示 ‘container runtime is down’ ，显示容器运行时出了问题。 我们使用的容器">
+<meta property="og:type" content="article">
+<meta property="og:title" content="docker hang 死阻塞 kubelet 初始化流程">
+<meta property="og:url" content="https://plpan.github.io/docker-hang-%E6%AD%BB%E9%98%BB%E5%A1%9E-kubelet-%E5%88%9D%E5%A7%8B%E5%8C%96%E6%B5%81%E7%A8%8B/index.html">
+<meta property="og:site_name" content="Stupig">
+<meta property="og:description" content="背景最近升级了一版kubelet，修复因kubelet删除Sidecar类型Pod慢导致平台删除集群超时的问题。在灰度redis隔离集群的时候，发现升级kubelet并重启服务后，少量宿主状态变成了NotReady，并且回滚kubelet至之前版本，宿主状态仍然是NotReady。查看宿主状态时提示 ‘container runtime is down’ ，显示容器运行时出了问题。 我们使用的容器">
+<meta property="og:locale">
+<meta property="article:published_time" content="2020-07-18T08:50:27.000Z">
+<meta property="article:modified_time" content="2020-11-12T01:23:48.061Z">
+<meta property="article:author" content="plpan">
+<meta property="article:tag" content="kubernetes">
+<meta property="article:tag" content="docker">
+<meta name="twitter:card" content="summary">
+
+
+
+<script type="text/javascript" id="hexo.configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    root: '',
+    scheme: 'Mist',
+    version: '5.1.4',
+    sidebar: {"position":"left","display":"always","offset":12,"b2t":false,"scrollpercent":false,"onmobile":false},
+    fancybox: true,
+    tabs: true,
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}},
+    duoshuo: {
+      userId: '0',
+      author: '博主'
+    },
+    algolia: {
+      applicationID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    }
+  };
+</script>
+
+
+
+  <link rel="canonical" href="https://plpan.github.io/docker-hang-死阻塞-kubelet-初始化流程/"/>
+
+
+
+
+
+  <title>docker hang 死阻塞 kubelet 初始化流程 | Stupig</title>
+  
+
+
+
+
+
+
+
+
+<meta name="generator" content="Hexo 5.2.0"></head>
+
+<body itemscope itemtype="http://schema.org/WebPage" lang="zh-Hans">
+
+  
+  
+    
+  
+
+  <div class="container sidebar-position-left page-post-detail">
+    <div class="headband"></div>
+
+    <header id="header" class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-wrapper">
+  <div class="site-meta ">
+    
+
+    <div class="custom-logo-site-title">
+      <a href="/"  class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">Stupig</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+      
+        <p class="site-subtitle"></p>
+      
+  </div>
+
+  <div class="site-nav-toggle">
+    <button>
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+    </button>
+  </div>
+</div>
+
+<nav class="site-nav">
+  
+
+  
+    <ul id="menu" class="menu">
+      
+        
+        <li class="menu-item menu-item-home">
+          <a href="/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-question-circle"></i> <br />
+            
+            首页
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-archives">
+          <a href="/archives" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-question-circle"></i> <br />
+            
+            归档
+          </a>
+        </li>
+      
+
+      
+        <li class="menu-item menu-item-search">
+          
+            <a href="javascript:;" class="popup-trigger">
+          
+            
+              <i class="menu-item-icon fa fa-search fa-fw"></i> <br />
+            
+            搜索
+          </a>
+        </li>
+      
+    </ul>
+  
+
+  
+    <div class="site-search">
+      
+  <div class="popup search-popup local-search-popup">
+  <div class="local-search-header clearfix">
+    <span class="search-icon">
+      <i class="fa fa-search"></i>
+    </span>
+    <span class="popup-btn-close">
+      <i class="fa fa-times-circle"></i>
+    </span>
+    <div class="local-search-input-wrapper">
+      <input autocomplete="off"
+             placeholder="搜索..." spellcheck="false"
+             type="text" id="local-search-input">
+    </div>
+  </div>
+  <div id="local-search-result"></div>
+</div>
+
+
+
+    </div>
+  
+</nav>
+
+
+
+ </div>
+    </header>
+
+    <main id="main" class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          <div id="content" class="content">
+            
+
+  <div id="posts" class="posts-expand">
+    
+
+  
+
+  
+  
+  
+
+  <article class="post post-type-normal" itemscope itemtype="http://schema.org/Article">
+  
+  
+  
+  <div class="post-block">
+    <link itemprop="mainEntityOfPage" href="https://plpan.github.io/docker-hang-%E6%AD%BB%E9%98%BB%E5%A1%9E-kubelet-%E5%88%9D%E5%A7%8B%E5%8C%96%E6%B5%81%E7%A8%8B/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="name" content="">
+      <meta itemprop="description" content="">
+      <meta itemprop="image" content="/images/avatar.gif">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Stupig">
+    </span>
+
+    
+      <header class="post-header">
+
+        
+        
+          <h1 class="post-title" itemprop="name headline">docker hang 死阻塞 kubelet 初始化流程</h1>
+        
+
+        <div class="post-meta">
+          <span class="post-time">
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">发表于</span>
+              
+              <time title="创建于" itemprop="dateCreated datePublished" datetime="2020-07-18T16:50:27+08:00">
+                2020-07-18
+              </time>
+            
+
+            
+
+            
+          </span>
+
+          
+            <span class="post-category" >
+            
+              <span class="post-meta-divider">|</span>
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">分类于</span>
+              
+              
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/%E9%97%AE%E9%A2%98%E6%8E%92%E6%9F%A5/" itemprop="url" rel="index">
+                    <span itemprop="name">问题排查</span>
+                  </a>
+                </span>
+
+                
+                
+              
+            </span>
+          
+
+          
+            
+          
+
+          
+          
+
+          
+
+          
+
+          
+
+        </div>
+      </header>
+    
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+      
+
+      
+        <h3 id="背景"><a href="#背景" class="headerlink" title="背景"></a>背景</h3><p>最近升级了一版kubelet，修复因kubelet删除Sidecar类型Pod慢导致平台删除集群超时的问题。在灰度redis隔离集群的时候，发现升级kubelet并重启服务后，少量宿主状态变成了NotReady，并且回滚kubelet至之前版本，宿主状态仍然是NotReady。查看宿主状态时提示 ‘container runtime is down’ ，显示容器运行时出了问题。</p>
+<p>我们使用的容器运行时是docker。我们就去检查docker的状态，检测结果如下：</p>
+<ul>
+<li>docker ps 查看所有容器列表，执行正常</li>
+<li>docker inspect 查看容器详细状态，某一容器执行阻塞</li>
+</ul>
+<p>典型的docker hang死行为。我们最近在升级docker版本，存量宿主docker的版本为1.13.1，并且在逐步升级至18.06.3，新宿主的docker版本都是18.06.3。docker hang死问题在1.13.1版本上表现得更彻底，在执行docker ps的时候就已经hang死了；而docker 18.06.3做了一点小小的优化，在执行docker ps时去掉了容器级别的加锁操作。但是很多docker命令在执行前都会申请容器锁，因此一旦某一个容器出现问题，并不会造成docker服务不可响应，受影响的也仅仅是该容器，无法执行操作。</p>
+<p>至于为什么以docker ps与docker inspect为指标检查docker状态，因为kubelet就是依赖这两个docker命令获取容器状态。</p>
+<p>所以，现在问题有二：</p>
+<ul>
+<li>docker hang死的根因是什么？</li>
+<li>docker hang死时，为什么重启kubelet，会导致宿主状态变为NotReady？</li>
+</ul>
+<p>docker hang死的排查详见：<a href="https://plpan.github.io/2020/07/17/docker-hang-%E6%AD%BB%E6%8E%92%E6%9F%A5%E4%B9%8B%E6%97%85/">docker-hang-死排查之旅</a>。现在我们再来分析，当容器异常时，为什么重启kubelet，宿主的状态会从Ready变成NotReady。</p>
+<h3 id="宿主状态生成机制"><a href="#宿主状态生成机制" class="headerlink" title="宿主状态生成机制"></a>宿主状态生成机制</h3><p>在问题排查之前，我们需要先了解宿主状态的生成机制。</p>
+<p>宿主的所有状态都是node.Status的属性，因此我们直接定位kubelet设置node.Status的代码即可。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// Run starts the kubelet reacting to config updates</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(kl *Kubelet)</span> <span class="title">Run</span><span class="params">(updates &lt;-<span class="keyword">chan</span> kubetypes.PodUpdate)</span></span> &#123;</span><br><span class="line">  ......</span><br><span class="line">  <span class="keyword">if</span> kl.kubeClient != <span class="literal">nil</span> &#123;</span><br><span class="line">		<span class="comment">// Start syncing node status immediately, this may set up things the runtime needs to run.</span></span><br><span class="line">		<span class="keyword">go</span> wait.Until(kl.syncNodeStatus, kl.nodeStatusUpdateFrequency, wait.NeverStop)</span><br><span class="line">		<span class="keyword">go</span> kl.fastStatusUpdateOnce()</span><br><span class="line">	&#125;</span><br><span class="line">  ......</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>kubelet在启动时创建了一个goroutine，周期性地向apiserver同步本宿主的状态，同步周期默认是10s。</p>
+<p>跟踪调用链路，我们可以看到kubelet针对宿主会设置多个Condition，表明宿主当前所处的状态，比如宿主内存是否告急、线程数是否告急，以及宿主是否就绪。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// defaultNodeStatusFuncs is a factory that generates the default set of</span></span><br><span class="line"><span class="comment">// setNodeStatus funcs</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(kl *Kubelet)</span> <span class="title">defaultNodeStatusFuncs</span><span class="params">()</span> []<span class="title">func</span><span class="params">(*v1.Node)</span> <span class="title">error</span></span> &#123;</span><br><span class="line">   ......</span><br><span class="line">   setters = <span class="built_in">append</span>(setters,</span><br><span class="line">      nodestatus.OutOfDiskCondition(kl.clock.Now, kl.recordNodeStatusEvent),</span><br><span class="line">      nodestatus.MemoryPressureCondition(kl.clock.Now, kl.evictionManager.IsUnderMemoryPressure, kl.recordNodeStatusEvent),</span><br><span class="line">      nodestatus.DiskPressureCondition(kl.clock.Now, kl.evictionManager.IsUnderDiskPressure, kl.recordNodeStatusEvent),</span><br><span class="line">      nodestatus.PIDPressureCondition(kl.clock.Now, kl.evictionManager.IsUnderPIDPressure, kl.recordNodeStatusEvent),</span><br><span class="line">      nodestatus.ReadyCondition(kl.clock.Now, kl.runtimeState.runtimeErrors, kl.runtimeState.networkErrors, validateHostFunc, kl.containerManager.Status, kl.recordNodeStatusEvent),</span><br><span class="line">      nodestatus.VolumesInUse(kl.volumeManager.ReconcilerStatesHasBeenSynced, kl.volumeManager.GetVolumesInUse),</span><br><span class="line">      <span class="comment">// TODO(mtaufen): I decided not to move this setter for now, since all it does is send an event</span></span><br><span class="line">      <span class="comment">// and record state back to the Kubelet runtime object. In the future, I&#x27;d like to isolate</span></span><br><span class="line">      <span class="comment">// these side-effects by decoupling the decisions to send events and partial status recording</span></span><br><span class="line">      <span class="comment">// from the Node setters.</span></span><br><span class="line">      kl.recordNodeSchedulableEvent,</span><br><span class="line">   )</span><br><span class="line">   <span class="keyword">return</span> setters</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>其中Ready Condition表明宿主是否就绪，kubectl查看宿主状态时，展示的Status信息就是Ready Condition的状态，常见的状态及其含义定义如下：</p>
+<ul>
+<li>Ready状态：表明宿主状态一切OK，能正常响应Pod事件</li>
+<li>NotReady状态：表明宿主的kubelet仍在运行，但是此时已经无法处理Pod事件。NotReady绝大多数情况都是由容器运行时异常导致</li>
+<li>Unknown状态：表明宿主上的kubelet已停止运行</li>
+</ul>
+<p>kubelet定义的Ready Condition的判定条件如下：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// ReadyCondition returns a Setter that updates the v1.NodeReady condition on the node.</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">ReadyCondition</span><span class="params">(</span></span></span><br><span class="line"><span class="function"><span class="params">	nowFunc <span class="keyword">func</span>()</span> <span class="title">time</span>.<span class="title">Time</span>, // <span class="title">typically</span> <span class="title">Kubelet</span>.<span class="title">clock</span>.<span class="title">Now</span></span></span><br><span class="line">	runtimeErrorsFunc <span class="function"><span class="keyword">func</span><span class="params">()</span> []<span class="title">string</span>, // <span class="title">typically</span> <span class="title">Kubelet</span>.<span class="title">runtimeState</span>.<span class="title">runtimeErrors</span></span></span><br><span class="line">	networkErrorsFunc <span class="function"><span class="keyword">func</span><span class="params">()</span> []<span class="title">string</span>, // <span class="title">typically</span> <span class="title">Kubelet</span>.<span class="title">runtimeState</span>.<span class="title">networkErrors</span></span></span><br><span class="line">	appArmorValidateHostFunc <span class="function"><span class="keyword">func</span><span class="params">()</span> <span class="title">error</span>, // <span class="title">typically</span> <span class="title">Kubelet</span>.<span class="title">appArmorValidator</span>.<span class="title">ValidateHost</span>, <span class="title">might</span> <span class="title">be</span> <span class="title">nil</span> <span class="title">depending</span> <span class="title">on</span> <span class="title">whether</span> <span class="title">there</span> <span class="title">was</span> <span class="title">an</span> <span class="title">appArmorValidator</span></span></span><br><span class="line">	cmStatusFunc <span class="function"><span class="keyword">func</span><span class="params">()</span> <span class="title">cm</span>.<span class="title">Status</span>, // <span class="title">typically</span> <span class="title">Kubelet</span>.<span class="title">containerManager</span>.<span class="title">Status</span></span></span><br><span class="line">	recordEventFunc <span class="function"><span class="keyword">func</span><span class="params">(eventType, event <span class="keyword">string</span>)</span>, // <span class="title">typically</span> <span class="title">Kubelet</span>.<span class="title">recordNodeStatusEvent</span></span></span><br><span class="line">) Setter &#123;</span><br><span class="line">	<span class="keyword">return</span> <span class="function"><span class="keyword">func</span><span class="params">(node *v1.Node)</span> <span class="title">error</span></span> &#123;</span><br><span class="line">		......</span><br><span class="line">		rs := <span class="built_in">append</span>(runtimeErrorsFunc(), networkErrorsFunc()...)</span><br><span class="line">    requiredCapacities := []v1.ResourceName&#123;v1.ResourceCPU, v1.ResourceMemory, v1.ResourcePods&#125;</span><br><span class="line">		<span class="keyword">if</span> utilfeature.DefaultFeatureGate.Enabled(features.LocalStorageCapacityIsolation) &#123;</span><br><span class="line">			requiredCapacities = <span class="built_in">append</span>(requiredCapacities, v1.ResourceEphemeralStorage)</span><br><span class="line">		&#125;</span><br><span class="line">		missingCapacities := []<span class="keyword">string</span>&#123;&#125;</span><br><span class="line">		<span class="keyword">for</span> _, resource := <span class="keyword">range</span> requiredCapacities &#123;</span><br><span class="line">			<span class="keyword">if</span> _, found := node.Status.Capacity[resource]; !found &#123;</span><br><span class="line">				missingCapacities = <span class="built_in">append</span>(missingCapacities, <span class="keyword">string</span>(resource))</span><br><span class="line">			&#125;</span><br><span class="line">		&#125;</span><br><span class="line">		<span class="keyword">if</span> <span class="built_in">len</span>(missingCapacities) &gt; <span class="number">0</span> &#123;</span><br><span class="line">			rs = <span class="built_in">append</span>(rs, fmt.Sprintf(<span class="string">&quot;Missing node capacity for resources: %s&quot;</span>, strings.Join(missingCapacities, <span class="string">&quot;, &quot;</span>)))</span><br><span class="line">		&#125;</span><br><span class="line">    <span class="keyword">if</span> <span class="built_in">len</span>(rs) &gt; <span class="number">0</span> &#123;</span><br><span class="line">			newNodeReadyCondition = v1.NodeCondition&#123;</span><br><span class="line">				Type:              v1.NodeReady,</span><br><span class="line">				Status:            v1.ConditionFalse,</span><br><span class="line">				Reason:            <span class="string">&quot;KubeletNotReady&quot;</span>,</span><br><span class="line">				Message:           strings.Join(rs, <span class="string">&quot;,&quot;</span>),</span><br><span class="line">				LastHeartbeatTime: currentTime,</span><br><span class="line">			&#125;</span><br><span class="line">		&#125;</span><br><span class="line">		......</span><br><span class="line">	&#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>以上代码片段显示，宿主是否Ready取决于很多条件，包含运行时判定、网络判定、基本资源判定等。</p>
+<h3 id="宿主状态变化定位"><a href="#宿主状态变化定位" class="headerlink" title="宿主状态变化定位"></a>宿主状态变化定位</h3><p>接下来，我们将重点放在运行时判定，分析宿主状态发生变化的原因。运行时判定条件定义如下：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(s *runtimeState)</span> <span class="title">runtimeErrors</span><span class="params">()</span> []<span class="title">string</span></span> &#123;</span><br><span class="line">   s.RLock()</span><br><span class="line">   <span class="keyword">defer</span> s.RUnlock()</span><br><span class="line">   <span class="keyword">var</span> ret []<span class="keyword">string</span></span><br><span class="line">   <span class="keyword">if</span> !s.lastBaseRuntimeSync.Add(s.baseRuntimeSyncThreshold).After(time.Now()) &#123;  <span class="comment">// 1</span></span><br><span class="line">      ret = <span class="built_in">append</span>(ret, <span class="string">&quot;container runtime is down&quot;</span>)</span><br><span class="line">   &#125;</span><br><span class="line">   <span class="keyword">if</span> s.internalError != <span class="literal">nil</span> &#123;</span><br><span class="line">      ret = <span class="built_in">append</span>(ret, s.internalError.Error())</span><br><span class="line">   &#125;</span><br><span class="line">   <span class="keyword">for</span> _, hc := <span class="keyword">range</span> s.healthChecks &#123;                                            <span class="comment">// 2</span></span><br><span class="line">      <span class="keyword">if</span> ok, err := hc.fn(); !ok &#123;</span><br><span class="line">         ret = <span class="built_in">append</span>(ret, fmt.Sprintf(<span class="string">&quot;%s is not healthy: %v&quot;</span>, hc.name, err))</span><br><span class="line">      &#125;</span><br><span class="line">   &#125;</span><br><span class="line">   <span class="keyword">return</span> ret</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>当出现如下两种状况之一时，则判定运行时检查不通过：</p>
+<ol>
+<li>当前时间距最近一次运行时同步操作 (lastBaseRuntimeSync) 的时间间隔超过指定阈值（默认30s）</li>
+<li>运行时健康检查未通过</li>
+</ol>
+<p>那么，当时宿主的NotReady是由哪种状况引起的呢？结合kubelet日志分析，kubelet每隔5s就输出一条日志：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">......</span><br><span class="line">I0715 <span class="number">10</span>:<span class="number">43</span>:<span class="number">28.049240</span>   <span class="number">16315</span> kubelet.<span class="keyword">go</span>:<span class="number">1835</span>] skipping pod synchronization - [container runtime is down]</span><br><span class="line">I0715 <span class="number">10</span>:<span class="number">43</span>:<span class="number">33.049359</span>   <span class="number">16315</span> kubelet.<span class="keyword">go</span>:<span class="number">1835</span>] skipping pod synchronization - [container runtime is down]</span><br><span class="line">I0715 <span class="number">10</span>:<span class="number">43</span>:<span class="number">38.049492</span>   <span class="number">16315</span> kubelet.<span class="keyword">go</span>:<span class="number">1835</span>] skipping pod synchronization - [container runtime is down]</span><br><span class="line">......</span><br></pre></td></tr></table></figure>
+
+<p>因此，状况1是宿主NotReady的元凶。</p>
+<p>我们继续分析为什么kubelet没有按照预期设置lastBaseRuntimeSync。kubelet启动时会创建一个goroutine，并在该goroutine中循环设置lastBaseRuntimeSync，循环如下：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(kl *Kubelet)</span> <span class="title">Run</span><span class="params">(updates &lt;-<span class="keyword">chan</span> kubetypes.PodUpdate)</span></span> &#123;</span><br><span class="line">   ......</span><br><span class="line">   <span class="keyword">go</span> wait.Until(kl.updateRuntimeUp, <span class="number">5</span>*time.Second, wait.NeverStop)</span><br><span class="line">   ......</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(kl *Kubelet)</span> <span class="title">updateRuntimeUp</span><span class="params">()</span></span> &#123;</span><br><span class="line">   kl.updateRuntimeMux.Lock()</span><br><span class="line">   <span class="keyword">defer</span> kl.updateRuntimeMux.Unlock()</span><br><span class="line">   ......</span><br><span class="line">   kl.oneTimeInitializer.Do(kl.initializeRuntimeDependentModules)</span><br><span class="line">   kl.runtimeState.setRuntimeSync(kl.clock.Now())</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(s *runtimeState)</span> <span class="title">setRuntimeSync</span><span class="params">(t time.Time)</span></span> &#123;</span><br><span class="line">	 s.Lock()</span><br><span class="line">	 <span class="keyword">defer</span> s.Unlock()</span><br><span class="line">	 s.lastBaseRuntimeSync = t</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>正常情况下，kubelet每隔5s会将lastBaseRuntimeSync设置为当前时间，而宿主状态异常时，这个时间戳一直未被更新。也即updateRuntimeUp一直被阻塞在设置lastBaseRuntimeSync之前的某一步。因此，我们只需逐个排查updateRuntimeUp内的函数调用即可，具体过程不再展示，最终的函数调用链路如下：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">initializeRuntimeDependentModules -&gt; kl.cadvisor.Start -&gt; cc.Manager.Start -&gt; self.createContainer -&gt; m.createContainerLocked -&gt; container.NewContainerHandler -&gt; factory.CanHandleAndAccept -&gt; self.client.ContainerInspect</span><br></pre></td></tr></table></figure>
+
+<p>调用链路显示，最后cadvisor执行docker inspect时被hang死，阻塞了kubelet的一个关键初始化流程。</p>
+<p>如果容器异常发生在kubelet初始化完毕之后，则不会对宿主的Ready状态造成任何影响，因为oneTimeInitializer是sync.Once类型，也即仅仅会在kubelet启动时执行一次。那时容器异常对kubelet的影响有限，仅仅是不能处理该Pod的任何事件，包含删除、变更等，但是仍然能够处理其他Pod的事件。</p>
+<p>这就解释了为什么kubelet重启前宿主状态是Ready，重启后状态是NotReady。</p>
+<h3 id="后续"><a href="#后续" class="headerlink" title="后续"></a>后续</h3><p>可能有人会问，为什么cadvisor执行docker inspect操作不加超时控制？确实，如果添加了超时控制，重启kubelet不会引起宿主状态变更。个人觉得添加超时控制没有什么问题，不清楚是否有啥坑，待详细挖掘后再来补充。</p>
+
+      
+    </div>
+    
+    
+    
+
+    
+
+    
+      <div>
+        <div style="padding: 10px 0; margin: 20px auto; width: 90%; text-align: center;">
+  <div></div>
+  <button id="rewardButton" disable="enable" onclick="var qr = document.getElementById('QR'); if (qr.style.display === 'none') {qr.style.display='block';} else {qr.style.display='none'}">
+    <span>打赏</span>
+  </button>
+  <div id="QR" style="display: none;">
+
+    
+      <div id="wechat" style="display: inline-block">
+        <img id="wechat_qr" src="/images/wechatpay.png" alt=" 微信支付"/>
+        <p>微信支付</p>
+      </div>
+    
+
+    
+
+    
+
+  </div>
+</div>
+
+      </div>
+    
+
+    
+
+    <footer class="post-footer">
+      
+        <div class="post-tags">
+          
+            <a href="/tags/kubernetes/" rel="tag"># kubernetes</a>
+          
+            <a href="/tags/docker/" rel="tag"># docker</a>
+          
+        </div>
+      
+
+      
+      
+      
+
+      
+        <div class="post-nav">
+          <div class="post-nav-next post-nav-item">
+            
+              <a href="/docker-hang-%E6%AD%BB%E6%8E%92%E6%9F%A5%E4%B9%8B%E6%97%85/" rel="next" title="docker hang 死排查之旅">
+                <i class="fa fa-chevron-left"></i> docker hang 死排查之旅
+              </a>
+            
+          </div>
+
+          <span class="post-nav-divider"></span>
+
+          <div class="post-nav-prev post-nav-item">
+            
+              <a href="/%E4%B8%80%E6%AC%A1%E8%AF%BB-pipe-%E5%BC%95%E5%8F%91%E7%9A%84%E8%A1%80%E6%A1%88/" rel="prev" title="一次读 pipe 引发的血案">
+                一次读 pipe 引发的血案 <i class="fa fa-chevron-right"></i>
+              </a>
+            
+          </div>
+        </div>
+      
+
+      
+      
+    </footer>
+  </div>
+  
+  
+  
+  </article>
+
+
+
+    <div class="post-spread">
+      
+    </div>
+  </div>
+
+
+          </div>
+          
+
+
+          
+
+  
+
+
+
+        </div>
+        
+          
+  
+  <div class="sidebar-toggle">
+    <div class="sidebar-toggle-line-wrap">
+      <span class="sidebar-toggle-line sidebar-toggle-line-first"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-middle"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-last"></span>
+    </div>
+  </div>
+
+  <aside id="sidebar" class="sidebar">
+    
+    <div class="sidebar-inner">
+
+      
+
+      
+        <ul class="sidebar-nav motion-element">
+          <li class="sidebar-nav-toc sidebar-nav-active" data-target="post-toc-wrap">
+            文章目录
+          </li>
+          <li class="sidebar-nav-overview" data-target="site-overview-wrap">
+            站点概览
+          </li>
+        </ul>
+      
+
+      <section class="site-overview-wrap sidebar-panel">
+        <div class="site-overview">
+          <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+            
+              <p class="site-author-name" itemprop="name"></p>
+              <p class="site-description motion-element" itemprop="description"></p>
+          </div>
+
+          <nav class="site-state motion-element">
+
+            
+              <div class="site-state-item site-state-posts">
+              
+                <a href="/archives">
+              
+                  <span class="site-state-item-count">7</span>
+                  <span class="site-state-item-name">日志</span>
+                </a>
+              </div>
+            
+
+            
+              
+              
+              <div class="site-state-item site-state-categories">
+                
+                  <span class="site-state-item-count">2</span>
+                  <span class="site-state-item-name">分类</span>
+                
+              </div>
+            
+
+            
+              
+              
+              <div class="site-state-item site-state-tags">
+                
+                  <span class="site-state-item-count">8</span>
+                  <span class="site-state-item-name">标签</span>
+                
+              </div>
+            
+
+          </nav>
+
+          
+            <div class="feed-link motion-element">
+              <a href="/atom.xml" rel="alternate">
+                <i class="fa fa-rss"></i>
+                RSS
+              </a>
+            </div>
+          
+
+          
+            <div class="links-of-author motion-element">
+                
+                  <span class="links-of-author-item">
+                    <a href="https://github.com/plpan" target="_blank" title="GitHub">
+                      GitHub</a>
+                  </span>
+                
+            </div>
+          
+
+          
+          
+
+          
+          
+
+          
+
+        </div>
+      </section>
+
+      
+      <!--noindex-->
+        <section class="post-toc-wrap motion-element sidebar-panel sidebar-panel-active">
+          <div class="post-toc">
+
+            
+              
+            
+
+            
+              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E8%83%8C%E6%99%AF"><span class="nav-number">1.</span> <span class="nav-text">背景</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%AE%BF%E4%B8%BB%E7%8A%B6%E6%80%81%E7%94%9F%E6%88%90%E6%9C%BA%E5%88%B6"><span class="nav-number">2.</span> <span class="nav-text">宿主状态生成机制</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%AE%BF%E4%B8%BB%E7%8A%B6%E6%80%81%E5%8F%98%E5%8C%96%E5%AE%9A%E4%BD%8D"><span class="nav-number">3.</span> <span class="nav-text">宿主状态变化定位</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%90%8E%E7%BB%AD"><span class="nav-number">4.</span> <span class="nav-text">后续</span></a></li></ol></div>
+            
+
+          </div>
+        </section>
+      <!--/noindex-->
+      
+
+      
+
+    </div>
+  </aside>
+
+
+        
+      </div>
+    </main>
+
+    <footer id="footer" class="footer">
+      <div class="footer-inner">
+        <div class="copyright">&copy; <span itemprop="copyrightYear">2020</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">plpan</span>
+
+  
+</div>
+
+
+
+
+
+
+
+
+
+        
+
+
+
+
+
+
+
+        
+      </div>
+    </footer>
+
+    
+      <div class="back-to-top">
+        <i class="fa fa-arrow-up"></i>
+        
+      </div>
+    
+
+    
+
+  </div>
+
+  
+
+<script type="text/javascript">
+  if (Object.prototype.toString.call(window.Promise) !== '[object Function]') {
+    window.Promise = null;
+  }
+</script>
+
+
+
+
+
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+  
+  
+    <script type="text/javascript" src="/lib/jquery/index.js?v=2.1.3"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/fastclick/lib/fastclick.min.js?v=1.0.6"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/jquery_lazyload/jquery.lazyload.js?v=1.9.7"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/velocity/velocity.min.js?v=1.2.1"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/velocity/velocity.ui.min.js?v=1.2.1"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/fancybox/source/jquery.fancybox.pack.js?v=2.1.5"></script>
+  
+
+
+  
+
+
+  <script type="text/javascript" src="/js/src/utils.js?v=5.1.4"></script>
+
+  <script type="text/javascript" src="/js/src/motion.js?v=5.1.4"></script>
+
+
+
+  
+  
+
+  
+  <script type="text/javascript" src="/js/src/scrollspy.js?v=5.1.4"></script>
+<script type="text/javascript" src="/js/src/post-details.js?v=5.1.4"></script>
+
+
+
+  
+
+
+  <script type="text/javascript" src="/js/src/bootstrap.js?v=5.1.4"></script>
+
+
+
+  
+
+
+  
+
+
+
+
+	
+
+
+
+
+
+  
+
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  <script type="text/javascript">
+    // Popup Window;
+    var isfetched = false;
+    var isXml = true;
+    // Search DB path;
+    var search_path = "";
+    if (search_path.length === 0) {
+      search_path = "search.xml";
+    } else if (/json$/i.test(search_path)) {
+      isXml = false;
+    }
+    var path = "/" + search_path;
+    // monitor main search box;
+
+    var onPopupClose = function (e) {
+      $('.popup').hide();
+      $('#local-search-input').val('');
+      $('.search-result-list').remove();
+      $('#no-result').remove();
+      $(".local-search-pop-overlay").remove();
+      $('body').css('overflow', '');
+    }
+
+    function proceedsearch() {
+      $("body")
+        .append('<div class="search-popup-overlay local-search-pop-overlay"></div>')
+        .css('overflow', 'hidden');
+      $('.search-popup-overlay').click(onPopupClose);
+      $('.popup').toggle();
+      var $localSearchInput = $('#local-search-input');
+      $localSearchInput.attr("autocapitalize", "none");
+      $localSearchInput.attr("autocorrect", "off");
+      $localSearchInput.focus();
+    }
+
+    // search function;
+    var searchFunc = function(path, search_id, content_id) {
+      'use strict';
+
+      // start loading animation
+      $("body")
+        .append('<div class="search-popup-overlay local-search-pop-overlay">' +
+          '<div id="search-loading-icon">' +
+          '<i class="fa fa-spinner fa-pulse fa-5x fa-fw"></i>' +
+          '</div>' +
+          '</div>')
+        .css('overflow', 'hidden');
+      $("#search-loading-icon").css('margin', '20% auto 0 auto').css('text-align', 'center');
+
+      $.ajax({
+        url: path,
+        dataType: isXml ? "xml" : "json",
+        async: true,
+        success: function(res) {
+          // get the contents from search data
+          isfetched = true;
+          $('.popup').detach().appendTo('.header-inner');
+          var datas = isXml ? $("entry", res).map(function() {
+            return {
+              title: $("title", this).text(),
+              content: $("content",this).text(),
+              url: $("url" , this).text()
+            };
+          }).get() : res;
+          var input = document.getElementById(search_id);
+          var resultContent = document.getElementById(content_id);
+          var inputEventFunction = function() {
+            var searchText = input.value.trim().toLowerCase();
+            var keywords = searchText.split(/[\s\-]+/);
+            if (keywords.length > 1) {
+              keywords.push(searchText);
+            }
+            var resultItems = [];
+            if (searchText.length > 0) {
+              // perform local searching
+              datas.forEach(function(data) {
+                var isMatch = false;
+                var hitCount = 0;
+                var searchTextCount = 0;
+                var title = data.title.trim();
+                var titleInLowerCase = title.toLowerCase();
+                var content = data.content.trim().replace(/<[^>]+>/g,"");
+                var contentInLowerCase = content.toLowerCase();
+                var articleUrl = decodeURIComponent(data.url);
+                var indexOfTitle = [];
+                var indexOfContent = [];
+                // only match articles with not empty titles
+                if(title != '') {
+                  keywords.forEach(function(keyword) {
+                    function getIndexByWord(word, text, caseSensitive) {
+                      var wordLen = word.length;
+                      if (wordLen === 0) {
+                        return [];
+                      }
+                      var startPosition = 0, position = [], index = [];
+                      if (!caseSensitive) {
+                        text = text.toLowerCase();
+                        word = word.toLowerCase();
+                      }
+                      while ((position = text.indexOf(word, startPosition)) > -1) {
+                        index.push({position: position, word: word});
+                        startPosition = position + wordLen;
+                      }
+                      return index;
+                    }
+
+                    indexOfTitle = indexOfTitle.concat(getIndexByWord(keyword, titleInLowerCase, false));
+                    indexOfContent = indexOfContent.concat(getIndexByWord(keyword, contentInLowerCase, false));
+                  });
+                  if (indexOfTitle.length > 0 || indexOfContent.length > 0) {
+                    isMatch = true;
+                    hitCount = indexOfTitle.length + indexOfContent.length;
+                  }
+                }
+
+                // show search results
+
+                if (isMatch) {
+                  // sort index by position of keyword
+
+                  [indexOfTitle, indexOfContent].forEach(function (index) {
+                    index.sort(function (itemLeft, itemRight) {
+                      if (itemRight.position !== itemLeft.position) {
+                        return itemRight.position - itemLeft.position;
+                      } else {
+                        return itemLeft.word.length - itemRight.word.length;
+                      }
+                    });
+                  });
+
+                  // merge hits into slices
+
+                  function mergeIntoSlice(text, start, end, index) {
+                    var item = index[index.length - 1];
+                    var position = item.position;
+                    var word = item.word;
+                    var hits = [];
+                    var searchTextCountInSlice = 0;
+                    while (position + word.length <= end && index.length != 0) {
+                      if (word === searchText) {
+                        searchTextCountInSlice++;
+                      }
+                      hits.push({position: position, length: word.length});
+                      var wordEnd = position + word.length;
+
+                      // move to next position of hit
+
+                      index.pop();
+                      while (index.length != 0) {
+                        item = index[index.length - 1];
+                        position = item.position;
+                        word = item.word;
+                        if (wordEnd > position) {
+                          index.pop();
+                        } else {
+                          break;
+                        }
+                      }
+                    }
+                    searchTextCount += searchTextCountInSlice;
+                    return {
+                      hits: hits,
+                      start: start,
+                      end: end,
+                      searchTextCount: searchTextCountInSlice
+                    };
+                  }
+
+                  var slicesOfTitle = [];
+                  if (indexOfTitle.length != 0) {
+                    slicesOfTitle.push(mergeIntoSlice(title, 0, title.length, indexOfTitle));
+                  }
+
+                  var slicesOfContent = [];
+                  while (indexOfContent.length != 0) {
+                    var item = indexOfContent[indexOfContent.length - 1];
+                    var position = item.position;
+                    var word = item.word;
+                    // cut out 100 characters
+                    var start = position - 20;
+                    var end = position + 80;
+                    if(start < 0){
+                      start = 0;
+                    }
+                    if (end < position + word.length) {
+                      end = position + word.length;
+                    }
+                    if(end > content.length){
+                      end = content.length;
+                    }
+                    slicesOfContent.push(mergeIntoSlice(content, start, end, indexOfContent));
+                  }
+
+                  // sort slices in content by search text's count and hits' count
+
+                  slicesOfContent.sort(function (sliceLeft, sliceRight) {
+                    if (sliceLeft.searchTextCount !== sliceRight.searchTextCount) {
+                      return sliceRight.searchTextCount - sliceLeft.searchTextCount;
+                    } else if (sliceLeft.hits.length !== sliceRight.hits.length) {
+                      return sliceRight.hits.length - sliceLeft.hits.length;
+                    } else {
+                      return sliceLeft.start - sliceRight.start;
+                    }
+                  });
+
+                  // select top N slices in content
+
+                  var upperBound = parseInt('1');
+                  if (upperBound >= 0) {
+                    slicesOfContent = slicesOfContent.slice(0, upperBound);
+                  }
+
+                  // highlight title and content
+
+                  function highlightKeyword(text, slice) {
+                    var result = '';
+                    var prevEnd = slice.start;
+                    slice.hits.forEach(function (hit) {
+                      result += text.substring(prevEnd, hit.position);
+                      var end = hit.position + hit.length;
+                      result += '<b class="search-keyword">' + text.substring(hit.position, end) + '</b>';
+                      prevEnd = end;
+                    });
+                    result += text.substring(prevEnd, slice.end);
+                    return result;
+                  }
+
+                  var resultItem = '';
+
+                  if (slicesOfTitle.length != 0) {
+                    resultItem += "<li><a href='" + articleUrl + "' class='search-result-title'>" + highlightKeyword(title, slicesOfTitle[0]) + "</a>";
+                  } else {
+                    resultItem += "<li><a href='" + articleUrl + "' class='search-result-title'>" + title + "</a>";
+                  }
+
+                  slicesOfContent.forEach(function (slice) {
+                    resultItem += "<a href='" + articleUrl + "'>" +
+                      "<p class=\"search-result\">" + highlightKeyword(content, slice) +
+                      "...</p>" + "</a>";
+                  });
+
+                  resultItem += "</li>";
+                  resultItems.push({
+                    item: resultItem,
+                    searchTextCount: searchTextCount,
+                    hitCount: hitCount,
+                    id: resultItems.length
+                  });
+                }
+              })
+            };
+            if (keywords.length === 1 && keywords[0] === "") {
+              resultContent.innerHTML = '<div id="no-result"><i class="fa fa-search fa-5x" /></div>'
+            } else if (resultItems.length === 0) {
+              resultContent.innerHTML = '<div id="no-result"><i class="fa fa-frown-o fa-5x" /></div>'
+            } else {
+              resultItems.sort(function (resultLeft, resultRight) {
+                if (resultLeft.searchTextCount !== resultRight.searchTextCount) {
+                  return resultRight.searchTextCount - resultLeft.searchTextCount;
+                } else if (resultLeft.hitCount !== resultRight.hitCount) {
+                  return resultRight.hitCount - resultLeft.hitCount;
+                } else {
+                  return resultRight.id - resultLeft.id;
+                }
+              });
+              var searchResultList = '<ul class=\"search-result-list\">';
+              resultItems.forEach(function (result) {
+                searchResultList += result.item;
+              })
+              searchResultList += "</ul>";
+              resultContent.innerHTML = searchResultList;
+            }
+          }
+
+          if ('auto' === 'auto') {
+            input.addEventListener('input', inputEventFunction);
+          } else {
+            $('.search-icon').click(inputEventFunction);
+            input.addEventListener('keypress', function (event) {
+              if (event.keyCode === 13) {
+                inputEventFunction();
+              }
+            });
+          }
+
+          // remove loading animation
+          $(".local-search-pop-overlay").remove();
+          $('body').css('overflow', '');
+
+          proceedsearch();
+        }
+      });
+    }
+
+    // handle and trigger popup window;
+    $('.popup-trigger').click(function(e) {
+      e.stopPropagation();
+      if (isfetched === false) {
+        searchFunc(path, 'local-search-input', 'local-search-result');
+      } else {
+        proceedsearch();
+      };
+    });
+
+    $('.popup-btn-close').click(onPopupClose);
+    $('.popup').click(function(e){
+      e.stopPropagation();
+    });
+    $(document).on('keyup', function (event) {
+      var shouldDismissSearchPopup = event.which === 27 &&
+        $('.search-popup').is(':visible');
+      if (shouldDismissSearchPopup) {
+        onPopupClose();
+      }
+    });
+  </script>
+
+
+
+
+
+  
+
+  
+
+  
+
+  
+  
+
+  
+
+  
+
+  
+
+</body>
+</html>
