@@ -89,7 +89,7 @@
 <meta property="og:description" content="背景最近升级了一版kubelet，修复因kubelet删除Sidecar类型Pod慢导致平台删除集群超时的问题。在灰度redis隔离集群的时候，发现升级kubelet并重启服务后，少量宿主状态变成了NotReady，并且回滚kubelet至之前版本，宿主状态仍然是NotReady。查看宿主状态时提示 ‘container runtime is down’ ，显示容器运行时出了问题。 我们使用的容器">
 <meta property="og:locale">
 <meta property="article:published_time" content="2020-07-18T08:50:27.000Z">
-<meta property="article:modified_time" content="2020-11-12T01:23:48.061Z">
+<meta property="article:modified_time" content="2020-11-12T14:52:25.727Z">
 <meta property="article:author" content="plpan">
 <meta property="article:tag" content="kubernetes">
 <meta property="article:tag" content="docker">
@@ -372,7 +372,7 @@
 <li>docker hang死的根因是什么？</li>
 <li>docker hang死时，为什么重启kubelet，会导致宿主状态变为NotReady？</li>
 </ul>
-<p>docker hang死的排查详见：<a href="https://plpan.github.io/2020/07/17/docker-hang-%E6%AD%BB%E6%8E%92%E6%9F%A5%E4%B9%8B%E6%97%85/">docker-hang-死排查之旅</a>。现在我们再来分析，当容器异常时，为什么重启kubelet，宿主的状态会从Ready变成NotReady。</p>
+<p>docker hang死的排查详见：<a href="https://plpan.github.io/docker-hang-%E6%AD%BB%E6%8E%92%E6%9F%A5%E4%B9%8B%E6%97%85/">docker-hang-死排查之旅</a>。现在我们再来分析，当容器异常时，为什么重启kubelet，宿主的状态会从Ready变成NotReady。</p>
 <h3 id="宿主状态生成机制"><a href="#宿主状态生成机制" class="headerlink" title="宿主状态生成机制"></a>宿主状态生成机制</h3><p>在问题排查之前，我们需要先了解宿主状态的生成机制。</p>
 <p>宿主的所有状态都是node.Status的属性，因此我们直接定位kubelet设置node.Status的代码即可。</p>
 <figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// Run starts the kubelet reacting to config updates</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(kl *Kubelet)</span> <span class="title">Run</span><span class="params">(updates &lt;-<span class="keyword">chan</span> kubetypes.PodUpdate)</span></span> &#123;</span><br><span class="line">  ......</span><br><span class="line">  <span class="keyword">if</span> kl.kubeClient != <span class="literal">nil</span> &#123;</span><br><span class="line">		<span class="comment">// Start syncing node status immediately, this may set up things the runtime needs to run.</span></span><br><span class="line">		<span class="keyword">go</span> wait.Until(kl.syncNodeStatus, kl.nodeStatusUpdateFrequency, wait.NeverStop)</span><br><span class="line">		<span class="keyword">go</span> kl.fastStatusUpdateOnce()</span><br><span class="line">	&#125;</span><br><span class="line">  ......</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>

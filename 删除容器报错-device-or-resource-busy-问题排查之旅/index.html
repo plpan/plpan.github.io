@@ -89,7 +89,7 @@
 <meta property="og:description" content="背景承接上文，近期我们排查弹性云线上几起故障时，故障由多个因素共同引起，列举如下：  弹性云在逐步灰度升级docker版本至 18.06.3-ce 由于历史原因，弹性云启用了docker服务的systemd配置选项 MountFlags&#x3D;slave 为了避免dockerd重启引起业务容器重建，弹性云启用了 live-restore&#x3D;true 配置，docker服务发生重启，dockerd与shim">
 <meta property="og:locale">
 <meta property="article:published_time" content="2020-10-15T03:59:32.000Z">
-<meta property="article:modified_time" content="2020-11-12T01:23:48.059Z">
+<meta property="article:modified_time" content="2020-11-12T14:53:22.099Z">
 <meta property="article:author" content="plpan">
 <meta property="article:tag" content="docker">
 <meta property="article:tag" content="linux">
@@ -359,7 +359,7 @@
       
 
       
-        <h3 id="背景"><a href="#背景" class="headerlink" title="背景"></a>背景</h3><p>承接<a href="https://plpan.github.io/2020/10/14/pod-terminating-%E6%8E%92%E6%9F%A5%E4%B9%8B%E6%97%85/">上文</a>，近期我们排查弹性云线上几起故障时，故障由多个因素共同引起，列举如下：</p>
+        <h3 id="背景"><a href="#背景" class="headerlink" title="背景"></a>背景</h3><p>承接<a href="https://plpan.github.io/pod-terminating-%E6%8E%92%E6%9F%A5%E4%B9%8B%E6%97%85/">上文</a>，近期我们排查弹性云线上几起故障时，故障由多个因素共同引起，列举如下：</p>
 <ul>
 <li>弹性云在逐步灰度升级docker版本至 <code>18.06.3-ce</code></li>
 <li>由于历史原因，弹性云启用了docker服务的systemd配置选项 <code>MountFlags=slave</code></li>

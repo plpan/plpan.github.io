@@ -89,7 +89,7 @@
 <meta property="og:description" content="背景最近，我们在升级kubelet时，发现部分宿主机上docker出现hang死的现象，发现过程详见：docker-hang-死阻塞-kubelet-初始化流程。 现在，我们聚焦在docker上，分析docker hang死问题发生时的现象、形成的原因、问题定位的方法，以及对应的解决办法。本文详细记录了整个过程。 docker hang死我们对docker hang死并不陌生，因为已经发生了好多起">
 <meta property="og:locale">
 <meta property="article:published_time" content="2020-07-17T08:20:51.000Z">
-<meta property="article:modified_time" content="2020-11-12T01:23:48.061Z">
+<meta property="article:modified_time" content="2020-11-12T14:53:31.389Z">
 <meta property="article:author" content="plpan">
 <meta property="article:tag" content="docker">
 <meta property="article:tag" content="containerd">
@@ -360,7 +360,7 @@
       
 
       
-        <h3 id="背景"><a href="#背景" class="headerlink" title="背景"></a>背景</h3><p>最近，我们在升级kubelet时，发现部分宿主机上docker出现hang死的现象，发现过程详见：<a href="https://plpan.github.io/2020/07/18/docker-hang-%E6%AD%BB%E9%98%BB%E5%A1%9E-kubelet-%E5%88%9D%E5%A7%8B%E5%8C%96%E6%B5%81%E7%A8%8B/">docker-hang-死阻塞-kubelet-初始化流程</a>。</p>
+        <h3 id="背景"><a href="#背景" class="headerlink" title="背景"></a>背景</h3><p>最近，我们在升级kubelet时，发现部分宿主机上docker出现hang死的现象，发现过程详见：<a href="https://plpan.github.io/docker-hang-%E6%AD%BB%E9%98%BB%E5%A1%9E-kubelet-%E5%88%9D%E5%A7%8B%E5%8C%96%E6%B5%81%E7%A8%8B/">docker-hang-死阻塞-kubelet-初始化流程</a>。</p>
 <p>现在，我们聚焦在docker上，分析docker hang死问题发生时的现象、形成的原因、问题定位的方法，以及对应的解决办法。本文详细记录了整个过程。</p>
 <h3 id="docker-hang死"><a href="#docker-hang死" class="headerlink" title="docker hang死"></a>docker hang死</h3><p>我们对docker hang死并不陌生，因为已经发生了好多起。其发生时的现象也多种多样。以往针对docker 1.13.1版本的排查都发现了一些线索，但是并没有定位到根因，最终绝大多数也是通过重启docker解决。而这一次发生在docker 18.06.3版本的docker hang死行为，经过我们4人小分队接近一周的望闻问切，终于确定了其病因。注意，docker hang死的原因远不止一种，因此本排查方法与结果并不具有普适性。</p>
 <p>在开始问题排查之前，我们先整理目前掌握的知识：</p>
@@ -452,7 +452,7 @@
 <p>同样。这种方案的升级成本太高了，升级containerd-shim时需要重启存量的所有容器，这个方案基本不可能通过评审。</p>
 <h4 id="最简单的办法"><a href="#最简单的办法" class="headerlink" title="最简单的办法"></a>最简单的办法</h4><p>既然runc init阻塞在写pipe，我们主动读取pipe内的内容，也能让runc init顺利退出。</p>
 <p>在将本解决方案自动化的过程中，如何能够识别如docker hang死是由于写pipe导致的，是一个小小的挑战。但是相对于以上两种解决方案，我认为还是值得一试，毕竟其影响微乎其微。</p>
-<h3 id="后续"><a href="#后续" class="headerlink" title="后续"></a>后续</h3><p>其实我们在读pipe的时候还引起了一个另外的问题，详见：<a href="https://plpan.github.io/2020/07/19/%E4%B8%80%E6%AC%A1%E8%AF%BB-pipe-%E5%BC%95%E5%8F%91%E7%9A%84%E8%A1%80%E6%A1%88/">一次读-pipe-引发的血案</a>。</p>
+<h3 id="后续"><a href="#后续" class="headerlink" title="后续"></a>后续</h3><p>其实我们在读pipe的时候还引起了一个另外的问题，详见：<a href="https://plpan.github.io/%E4%B8%80%E6%AC%A1%E8%AF%BB-pipe-%E5%BC%95%E5%8F%91%E7%9A%84%E8%A1%80%E6%A1%88/">一次读-pipe-引发的血案</a>。</p>
 <p>另外，docker hang死的原因远非这一种，本次排查的结果也并非适用于所有场景。希望各位看官能够根据自己的现场排查问题。</p>
 <p>本次docker hang死的排查之旅已然告终。</p>
 <p>本次排查由四人小分队 @飞哥 @鹤哥 @博哥 @我 一起排查长达数天的结论，欢迎大家一键三连，以表支持。</p>

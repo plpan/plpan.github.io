@@ -89,7 +89,7 @@
 <meta property="og:description" content="背景背景详见：docker-hang-死排查之旅。总结成一句话：runc非预期写pipe造成一系列组件的阻塞，当我们读pipe以消除阻塞时，发生了一个非预期的现象——宿主上所有的容器都被重建了。 再详细分析问题原因之前，我们先简单回顾下linux pipe的基础知识。 linux pipelinux pipe（也即管道），相信大家对它都不陌生，是一种典型的进程间通信机制。管道主要分为两类：命名管道">
 <meta property="og:locale">
 <meta property="article:published_time" content="2020-07-19T10:53:03.000Z">
-<meta property="article:modified_time" content="2020-11-12T01:23:48.062Z">
+<meta property="article:modified_time" content="2020-11-12T14:53:08.617Z">
 <meta property="article:author" content="plpan">
 <meta property="article:tag" content="kubernetes">
 <meta property="article:tag" content="docker">
@@ -359,7 +359,7 @@
       
 
       
-        <h3 id="背景"><a href="#背景" class="headerlink" title="背景"></a>背景</h3><p>背景详见：<a href="https://plpan.github.io/2020/07/17/docker-hang-%E6%AD%BB%E6%8E%92%E6%9F%A5%E4%B9%8B%E6%97%85/">docker-hang-死排查之旅</a>。总结成一句话：runc非预期写pipe造成一系列组件的阻塞，当我们读pipe以消除阻塞时，发生了一个非预期的现象——宿主上所有的容器都被重建了。</p>
+        <h3 id="背景"><a href="#背景" class="headerlink" title="背景"></a>背景</h3><p>背景详见：<a href="https://plpan.github.io/docker-hang-%E6%AD%BB%E6%8E%92%E6%9F%A5%E4%B9%8B%E6%97%85/">docker-hang-死排查之旅</a>。总结成一句话：runc非预期写pipe造成一系列组件的阻塞，当我们读pipe以消除阻塞时，发生了一个非预期的现象——宿主上所有的容器都被重建了。</p>
 <p>再详细分析问题原因之前，我们先简单回顾下linux pipe的基础知识。</p>
 <h3 id="linux-pipe"><a href="#linux-pipe" class="headerlink" title="linux pipe"></a>linux pipe</h3><p>linux pipe（也即管道），相信大家对它都不陌生，是一种典型的进程间通信机制。管道主要分为两类：命名管道与匿名管道。其区别在于：</p>
 <ul>
@@ -372,7 +372,7 @@
 <li>写段：当管道已被写满时，写操作阻塞，直到数据被读出</li>
 </ul>
 <p>linux pipe默认大小为16内存页[ref.2]，也即65536字节。</p>
-<p>这里我有一个小疑惑：写pipe超过65536字节才会被阻塞，我们在宿主上也验证了这个结论，但是<a href="https://plpan.github.io/2020/07/17/docker-hang-%E6%AD%BB%E6%8E%92%E6%9F%A5%E4%B9%8B%E6%97%85/">docker-hang-死排查之旅</a>写入5378字符时就已被阻塞。欢迎了解的小伙伴解惑。</p>
+<p>这里我有一个小疑惑：写pipe超过65536字节才会被阻塞，我们在宿主上也验证了这个结论，但是<a href="https://plpan.github.io/docker-hang-%E6%AD%BB%E6%8E%92%E6%9F%A5%E4%B9%8B%E6%97%85/">docker-hang-死排查之旅</a>写入5378字符时就已被阻塞。欢迎了解的小伙伴解惑。</p>
 <h3 id="血案发生"><a href="#血案发生" class="headerlink" title="血案发生"></a>血案发生</h3><p>由于runc init非预期往pipe里写入大量数据而引起阻塞，我们消除阻塞的做法很简单，人为读取pipe中的内容。当我们读取完pipe中的内容时，原本一切都应该按照我们的预期发展：收集到runc init非预期写pipe的真正原因；异常容器恢复响应。确实，以上两点都如我们预期的发生了，然而，此时还发生了一个非预期的动作：宿主上所有容器都被重建了。</p>
 <p>一个线上事故就此发生。原本其他线上容器运行正常，当我们解决docker hang死问题时，却引起了其他容器的一次重建，这显然是不可接受的。</p>
 <h3 id="问题定位"><a href="#问题定位" class="headerlink" title="问题定位"></a>问题定位</h3><p>我们的第一嫌犯是docker，怀疑宿主docker服务发生了重启。当我们验证docker服务状态时，排除了docker的嫌疑，因为docker上一次重启时间是好多天前。</p>
@@ -391,7 +391,7 @@
 <li>宿主的状态为NotReady或者Unknown</li>
 <li>宿主状态保持非Ready超过指定时间阈值。该时间阈值由nc.podEvictionTimeout定义，默认为5分钟，我们的线上集群将其定制为2000分钟</li>
 </ol>
-<p>在<a href="https://plpan.github.io/2020/07/18/docker-hang-%E6%AD%BB%E9%98%BB%E5%A1%9E-kubelet-%E5%88%9D%E5%A7%8B%E5%8C%96%E6%B5%81%E7%A8%8B/">docker-hang-死阻塞-kubelet-初始化流程</a>中，我们提到由于docker hang死，kubelet初始化流程被阻塞，宿主状态为NotReady，命中条件1；我们检查kubelet NotReady的起始时间为2020-07-10 17:58:59，与控制器删除Pod的时间间隔基本为2000分钟，命中条件2。</p>
+<p>在<a href="https://plpan.github.io/docker-hang-%E6%AD%BB%E9%98%BB%E5%A1%9E-kubelet-%E5%88%9D%E5%A7%8B%E5%8C%96%E6%B5%81%E7%A8%8B/">docker-hang-死阻塞-kubelet-初始化流程</a>中，我们提到由于docker hang死，kubelet初始化流程被阻塞，宿主状态为NotReady，命中条件1；我们检查kubelet NotReady的起始时间为2020-07-10 17:58:59，与控制器删除Pod的时间间隔基本为2000分钟，命中条件2。</p>
 <p>至此，本问题基本已盖棺定论：由于线上宿主状态非Ready持续时间太长，引起控制器驱逐宿主上所有容器导致。</p>
 <h3 id="思考"><a href="#思考" class="headerlink" title="思考"></a>思考</h3><p>清楚了其原理之后，大家再来思考一个问题：当宿主状态非Ready时，无法处理控制器发出的驱逐容器的请求，当且仅当宿主状态变成Ready之后，才能开始处理。既然宿主已恢复，是否还有必要立即驱逐其上的所有容器？尤其是针对有状态服务，删除Pod之后，立马又在原宿主创建该Pod。我个人感觉非但没有必要，而且还存在一定风险。</p>
 <p>针对控制器的驱逐策略，我们调大了线上的驱逐时间间隔，从原来的2000分钟，调整为3年。</p>
