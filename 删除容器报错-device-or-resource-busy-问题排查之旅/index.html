@@ -458,7 +458,7 @@
     
       <div>
         <div style="padding: 10px 0; margin: 20px auto; width: 90%; text-align: center;">
-  <div></div>
+  <div>坚持原创技术分享，您的支持将鼓励我继续创作！</div>
   <button id="rewardButton" disable="enable" onclick="var qr = document.getElementById('QR'); if (qr.style.display === 'none') {qr.style.display='block';} else {qr.style.display='none'}">
     <span>打赏</span>
   </button>
@@ -538,6 +538,11 @@
 
 
           
+
+  
+    <div class="comments" id="comments">
+      <div id="gitalk-container"></div>
+    </div>
 
   
 
@@ -658,7 +663,7 @@
             
 
             
-              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E8%83%8C%E6%99%AF"><span class="nav-number">1.</span> <span class="nav-text">背景</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%AF%B9%E6%AF%94%E5%AE%9E%E9%AA%8C"><span class="nav-number">2.</span> <span class="nav-text">对比实验</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E8%9B%9B%E4%B8%9D%E9%A9%AC%E8%BF%B9"><span class="nav-number">3.</span> <span class="nav-text">蛛丝马迹</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%88%A8%E6%A0%B9%E9%97%AE%E5%BA%95"><span class="nav-number">4.</span> <span class="nav-text">刨根问底</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E7%BB%93%E8%AF%AD"><span class="nav-number">5.</span> <span class="nav-text">结语</span></a></li></ol></div>
+              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E8%83%8C%E6%99%AF"><span class="nav-text">背景</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%AF%B9%E6%AF%94%E5%AE%9E%E9%AA%8C"><span class="nav-text">对比实验</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E8%9B%9B%E4%B8%9D%E9%A9%AC%E8%BF%B9"><span class="nav-text">蛛丝马迹</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%88%A8%E6%A0%B9%E9%97%AE%E5%BA%95"><span class="nav-text">刨根问底</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E7%BB%93%E8%AF%AD"><span class="nav-text">结语</span></a></li></ol></div>
             
 
           </div>
@@ -835,6 +840,20 @@
 
 
 
+
+  <link rel="stylesheet" href="https://unpkg.com/gitalk/dist/gitalk.css">
+  <script src="https://unpkg.com/gitalk/dist/gitalk.min.js"></script>
+  <script type="text/javascript">
+    var gitalk = new Gitalk({
+      clientID: '334a8866f390a4eaaba2',
+      clientSecret: '33515b0cbae23af154a4b0c1cd30bcdc3e52df87',
+      repo: 'gitalk',
+      owner: '',
+      admin: ['plpan'],
+      perPage: 10
+    })
+    gitalk.render('gitalk-container')           
+  </script>
 
   
 

@@ -425,7 +425,7 @@
     
       <div>
         <div style="padding: 10px 0; margin: 20px auto; width: 90%; text-align: center;">
-  <div></div>
+  <div>坚持原创技术分享，您的支持将鼓励我继续创作！</div>
   <button id="rewardButton" disable="enable" onclick="var qr = document.getElementById('QR'); if (qr.style.display === 'none') {qr.style.display='block';} else {qr.style.display='none'}">
     <span>打赏</span>
   </button>
@@ -509,6 +509,11 @@
 
 
           
+
+  
+    <div class="comments" id="comments">
+      <div id="gitalk-container"></div>
+    </div>
 
   
 
@@ -629,7 +634,7 @@
             
 
             
-              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E8%83%8C%E6%99%AF"><span class="nav-number">1.</span> <span class="nav-text">背景</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%AE%BF%E4%B8%BB%E7%8A%B6%E6%80%81%E7%94%9F%E6%88%90%E6%9C%BA%E5%88%B6"><span class="nav-number">2.</span> <span class="nav-text">宿主状态生成机制</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%AE%BF%E4%B8%BB%E7%8A%B6%E6%80%81%E5%8F%98%E5%8C%96%E5%AE%9A%E4%BD%8D"><span class="nav-number">3.</span> <span class="nav-text">宿主状态变化定位</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%90%8E%E7%BB%AD"><span class="nav-number">4.</span> <span class="nav-text">后续</span></a></li></ol></div>
+              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E8%83%8C%E6%99%AF"><span class="nav-text">背景</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%AE%BF%E4%B8%BB%E7%8A%B6%E6%80%81%E7%94%9F%E6%88%90%E6%9C%BA%E5%88%B6"><span class="nav-text">宿主状态生成机制</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%AE%BF%E4%B8%BB%E7%8A%B6%E6%80%81%E5%8F%98%E5%8C%96%E5%AE%9A%E4%BD%8D"><span class="nav-text">宿主状态变化定位</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%90%8E%E7%BB%AD"><span class="nav-text">后续</span></a></li></ol></div>
             
 
           </div>
@@ -806,6 +811,20 @@
 
 
 
+
+  <link rel="stylesheet" href="https://unpkg.com/gitalk/dist/gitalk.css">
+  <script src="https://unpkg.com/gitalk/dist/gitalk.min.js"></script>
+  <script type="text/javascript">
+    var gitalk = new Gitalk({
+      clientID: '334a8866f390a4eaaba2',
+      clientSecret: '33515b0cbae23af154a4b0c1cd30bcdc3e52df87',
+      repo: 'gitalk',
+      owner: '',
+      admin: ['plpan'],
+      perPage: 10
+    })
+    gitalk.render('gitalk-container')           
+  </script>
 
   
 
