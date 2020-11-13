@@ -868,8 +868,9 @@
       owner: '',
       admin: ['plpan'],
       id:'_20200717162051',
-      labels: '',
-      perPage: 10
+      labels: ''.split(',').filter(l => l),
+      perPage: 10,
+      createIssueManually: false
     })
     gitalk.render('gitalk-container')           
   </script>
