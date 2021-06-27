@@ -1,0 +1,1181 @@
+<!DOCTYPE html>
+
+
+
+  
+
+
+<html class="theme-next mist use-motion" lang="zh-Hans">
+<head>
+  <meta charset="UTF-8"/>
+<meta http-equiv="X-UA-Compatible" content="IE=edge" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1"/>
+<meta name="theme-color" content="#222">
+
+
+
+
+
+
+
+
+
+<meta http-equiv="Cache-Control" content="no-transform" />
+<meta http-equiv="Cache-Control" content="no-siteapp" />
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+  
+  <link href="/lib/fancybox/source/jquery.fancybox.css?v=2.1.5" rel="stylesheet" type="text/css" />
+
+
+
+
+
+
+
+<link href="/lib/font-awesome/css/font-awesome.min.css?v=4.6.2" rel="stylesheet" type="text/css" />
+
+<link href="/css/main.css?v=5.1.4" rel="stylesheet" type="text/css" />
+
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png?v=5.1.4">
+
+
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png?v=5.1.4">
+
+
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png?v=5.1.4">
+
+
+  <link rel="mask-icon" href="/images/logo.svg?v=5.1.4" color="#222">
+
+
+
+
+
+  <meta name="keywords" content="docker,containerd,runc," />
+
+
+
+
+
+  <link rel="alternate" href="/atom.xml" title="Stupig" type="application/atom+xml" />
+
+
+
+
+
+
+<meta name="description" content="锄禾日当午，值班好辛苦； 汗滴禾下土，一查一下午。 问题描述今天，在值班排查线上问题的过程中，发现系统日志一直在刷docker异常日志： 123May 12 09:08:40 HOSTNAME dockerd[4085]: time&#x3D;&quot;2021-05-12T09:08:40.642410594+08:00&quot; level&#x3D;error msg&#x3D;&quot;stream copy e">
+<meta property="og:type" content="article">
+<meta property="og:title" content="docker exec 失败问题排查之旅">
+<meta property="og:url" content="https://plpan.github.io/docker-exec-%E5%A4%B1%E8%B4%A5%E9%97%AE%E9%A2%98%E6%8E%92%E6%9F%A5%E4%B9%8B%E6%97%85/index.html">
+<meta property="og:site_name" content="Stupig">
+<meta property="og:description" content="锄禾日当午，值班好辛苦； 汗滴禾下土，一查一下午。 问题描述今天，在值班排查线上问题的过程中，发现系统日志一直在刷docker异常日志： 123May 12 09:08:40 HOSTNAME dockerd[4085]: time&#x3D;&quot;2021-05-12T09:08:40.642410594+08:00&quot; level&#x3D;error msg&#x3D;&quot;stream copy e">
+<meta property="og:locale">
+<meta property="og:image" content="https://plpan.github.io/docker-exec-%E5%A4%B1%E8%B4%A5%E9%97%AE%E9%A2%98%E6%8E%92%E6%9F%A5%E4%B9%8B%E6%97%85/docker-call-path.png">
+<meta property="og:image" content="https://plpan.github.io/docker-exec-%E5%A4%B1%E8%B4%A5%E9%97%AE%E9%A2%98%E6%8E%92%E6%9F%A5%E4%B9%8B%E6%97%85/thread-monitor.png">
+<meta property="og:image" content="https://plpan.github.io/docker-exec-%E5%A4%B1%E8%B4%A5%E9%97%AE%E9%A2%98%E6%8E%92%E6%9F%A5%E4%B9%8B%E6%97%85/runc-detail.png">
+<meta property="article:published_time" content="2021-05-13T11:43:51.000Z">
+<meta property="article:modified_time" content="2021-06-27T08:33:36.285Z">
+<meta property="article:author" content="plpan">
+<meta property="article:tag" content="docker">
+<meta property="article:tag" content="containerd">
+<meta property="article:tag" content="runc">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://plpan.github.io/docker-exec-%E5%A4%B1%E8%B4%A5%E9%97%AE%E9%A2%98%E6%8E%92%E6%9F%A5%E4%B9%8B%E6%97%85/docker-call-path.png">
+
+
+
+<script type="text/javascript" id="hexo.configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    root: '',
+    scheme: 'Mist',
+    version: '5.1.4',
+    sidebar: {"position":"left","display":"always","offset":12,"b2t":false,"scrollpercent":false,"onmobile":false},
+    fancybox: true,
+    tabs: true,
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}},
+    duoshuo: {
+      userId: '0',
+      author: '博主'
+    },
+    algolia: {
+      applicationID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    }
+  };
+</script>
+
+
+
+  <link rel="canonical" href="https://plpan.github.io/docker-exec-失败问题排查之旅/"/>
+
+
+
+
+
+  <title>docker exec 失败问题排查之旅 | Stupig</title>
+  
+
+
+
+
+
+
+
+
+<meta name="generator" content="Hexo 5.2.0"></head>
+
+<body itemscope itemtype="http://schema.org/WebPage" lang="zh-Hans">
+
+  
+  
+    
+  
+
+  <div class="container sidebar-position-left page-post-detail">
+    <div class="headband"></div>
+
+    <header id="header" class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-wrapper">
+  <div class="site-meta ">
+    
+
+    <div class="custom-logo-site-title">
+      <a href="/"  class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">Stupig</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+      
+        <p class="site-subtitle"></p>
+      
+  </div>
+
+  <div class="site-nav-toggle">
+    <button>
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+    </button>
+  </div>
+</div>
+
+<nav class="site-nav">
+  
+
+  
+    <ul id="menu" class="menu">
+      
+        
+        <li class="menu-item menu-item-home">
+          <a href="/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-question-circle"></i> <br />
+            
+            首页
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-archives">
+          <a href="/archives" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-question-circle"></i> <br />
+            
+            归档
+          </a>
+        </li>
+      
+
+      
+        <li class="menu-item menu-item-search">
+          
+            <a href="javascript:;" class="popup-trigger">
+          
+            
+              <i class="menu-item-icon fa fa-search fa-fw"></i> <br />
+            
+            搜索
+          </a>
+        </li>
+      
+    </ul>
+  
+
+  
+    <div class="site-search">
+      
+  <div class="popup search-popup local-search-popup">
+  <div class="local-search-header clearfix">
+    <span class="search-icon">
+      <i class="fa fa-search"></i>
+    </span>
+    <span class="popup-btn-close">
+      <i class="fa fa-times-circle"></i>
+    </span>
+    <div class="local-search-input-wrapper">
+      <input autocomplete="off"
+             placeholder="搜索..." spellcheck="false"
+             type="text" id="local-search-input">
+    </div>
+  </div>
+  <div id="local-search-result"></div>
+</div>
+
+
+
+    </div>
+  
+</nav>
+
+
+
+ </div>
+    </header>
+
+    <main id="main" class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          <div id="content" class="content">
+            
+
+  <div id="posts" class="posts-expand">
+    
+
+  
+
+  
+  
+  
+
+  <article class="post post-type-normal" itemscope itemtype="http://schema.org/Article">
+  
+  
+  
+  <div class="post-block">
+    <link itemprop="mainEntityOfPage" href="https://plpan.github.io/docker-exec-%E5%A4%B1%E8%B4%A5%E9%97%AE%E9%A2%98%E6%8E%92%E6%9F%A5%E4%B9%8B%E6%97%85/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="name" content="">
+      <meta itemprop="description" content="">
+      <meta itemprop="image" content="/images/avatar.gif">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Stupig">
+    </span>
+
+    
+      <header class="post-header">
+
+        
+        
+          <h1 class="post-title" itemprop="name headline">docker exec 失败问题排查之旅</h1>
+        
+
+        <div class="post-meta">
+          <span class="post-time">
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">发表于</span>
+              
+              <time title="创建于" itemprop="dateCreated datePublished" datetime="2021-05-13T19:43:51+08:00">
+                2021-05-13
+              </time>
+            
+
+            
+
+            
+          </span>
+
+          
+            <span class="post-category" >
+            
+              <span class="post-meta-divider">|</span>
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">分类于</span>
+              
+              
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/%E9%97%AE%E9%A2%98%E6%8E%92%E6%9F%A5/" itemprop="url" rel="index">
+                    <span itemprop="name">问题排查</span>
+                  </a>
+                </span>
+
+                
+                
+              
+            </span>
+          
+
+          
+            
+          
+
+          
+          
+
+          
+
+          
+
+          
+
+        </div>
+      </header>
+    
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+      
+
+      
+        <p>锄禾日当午，值班好辛苦；</p>
+<p>汗滴禾下土，一查一下午。</p>
+<h3 id="问题描述"><a href="#问题描述" class="headerlink" title="问题描述"></a>问题描述</h3><p>今天，在值班排查线上问题的过程中，发现系统日志一直在刷docker异常日志：</p>
+<figure class="highlight apache"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="attribute">May</span> <span class="number">12</span> <span class="number">09</span>:<span class="number">08</span>:<span class="number">40</span> HOSTNAME dockerd[<span class="number">4085</span>]: time=<span class="string">&quot;2021-05-12T09:08:40.642410594+08:00&quot;</span> level=error msg=<span class="string">&quot;stream copy error: reading from a closed fifo&quot;</span></span><br><span class="line"><span class="attribute">May</span> <span class="number">12</span> <span class="number">09</span>:<span class="number">08</span>:<span class="number">40</span> HOSTNAME dockerd[<span class="number">4085</span>]: time=<span class="string">&quot;2021-05-12T09:08:40.642418571+08:00&quot;</span> level=error msg=<span class="string">&quot;stream copy error: reading from a closed fifo&quot;</span></span><br><span class="line"><span class="attribute">May</span> <span class="number">12</span> <span class="number">09</span>:<span class="number">08</span>:<span class="number">40</span> HOSTNAME dockerd[<span class="number">4085</span>]: time=<span class="string">&quot;2021-05-12T09:08:40.663754355+08:00&quot;</span> level=error msg=<span class="string">&quot;Error running exec 110deb1c1b2a2d2671d7368bd02bfc18a968e4712a3c771dedf0b362820e73cb in container: OCI runtime exec failed: exec failed: container_linux.go:348: starting container process caused \&quot;read init-p: connection reset by peer\&quot;: unknown&quot;</span></span><br></pre></td></tr></table></figure>
+
+<p>从系统风险性上来看，异常日志出现的原因需要排查清楚，并摸清是否会对业务产生影响。</p>
+<p>下文简单介绍问题排查的流程，以及产生的原因。</p>
+<h3 id="问题排查"><a href="#问题排查" class="headerlink" title="问题排查"></a>问题排查</h3><p>现在我们唯一掌握的信息，只有系统日志告知dockerd执行exec失败。</p>
+<p>在具体的问题分析之前，我们再来回顾一下docker的工作原理与调用链路：</p>
+<p><img src="docker-call-path.png" alt="docker调用链路"></p>
+<p>可见，docker的调用链路非常长，涉及组件也较多。因此，我们的排查路径主要分为如下两步：</p>
+<ul>
+<li>确定引起失败的组件</li>
+<li>确定组件失败的原因</li>
+</ul>
+<h4 id="定位组件"><a href="#定位组件" class="headerlink" title="定位组件"></a>定位组件</h4><p>熟悉docker的用户能够一眼定位引起问题的组件。但是，我们还是按照常规的排查流程走一遍：</p>
+<figure class="highlight angelscript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br><span class="line">91</span><br><span class="line">92</span><br><span class="line">93</span><br><span class="line">94</span><br><span class="line">95</span><br><span class="line">96</span><br><span class="line">97</span><br><span class="line">98</span><br><span class="line">99</span><br><span class="line">100</span><br><span class="line">101</span><br><span class="line">102</span><br><span class="line">103</span><br><span class="line">104</span><br><span class="line">105</span><br><span class="line">106</span><br><span class="line">107</span><br><span class="line">108</span><br><span class="line">109</span><br><span class="line">110</span><br><span class="line">111</span><br><span class="line">112</span><br><span class="line">113</span><br><span class="line">114</span><br><span class="line">115</span><br><span class="line">116</span><br><span class="line">117</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 1. 定位问题容器</span></span><br><span class="line"># sudo docker ps | grep -v pause | grep -v NAMES | awk <span class="string">&#x27;&#123;print $1&#125;&#x27;</span> | xargs -ti sudo docker exec &#123;&#125; sleep <span class="number">1</span></span><br><span class="line">sudo docker exec aa1e331ec24f sleep <span class="number">1</span></span><br><span class="line">OCI runtime exec failed: exec failed: container_linux.go:<span class="number">348</span>: starting container process caused <span class="string">&quot;read init-p: connection reset by peer&quot;</span>: unknown</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="comment">// 2. 排除docker嫌疑</span></span><br><span class="line"># docker-containerd-ctr -a /var/run/docker/containerd/docker-containerd.sock -n moby t exec --exec-id stupig1 aa1e331ec24f621ab3152ebe94f1e533734164af86c9df0f551eab2b1967ec4e sleep <span class="number">1</span></span><br><span class="line">ctr: OCI runtime exec failed: exec failed: container_linux.go:<span class="number">348</span>: starting container process caused <span class="string">&quot;read init-p: connection reset by peer&quot;</span>: unknown</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="comment">// 3. 排除containerd与containerd-shim嫌疑</span></span><br><span class="line"># docker-runc --root /var/run/docker/runtime-runc/moby/ exec aa1e331ec24f621ab3152ebe94f1e533734164af86c9df0f551eab2b1967ec4e sleep</span><br><span class="line">runtime/cgo: pthread_create failed: Resource temporarily unavailable</span><br><span class="line">SIGABRT: abort</span><br><span class="line">PC=<span class="number">0x6b657e</span> m=<span class="number">0</span> sigcode=<span class="number">18446744073709551610</span></span><br><span class="line"></span><br><span class="line">goroutine <span class="number">0</span> [idle]:</span><br><span class="line">runtime: unknown pc <span class="number">0x6b657e</span></span><br><span class="line">stack: frame=&#123;sp:<span class="number">0x7ffd30f0d218</span>, fp:<span class="number">0x0</span>&#125; stack=[<span class="number">0x7ffd2ab0e738</span>,<span class="number">0x7ffd30f0d760</span>)</span><br><span class="line"><span class="number">00007f</span>fd30f0d118:  <span class="number">0000000000000002</span>  <span class="number">00007f</span>fd30f7f184</span><br><span class="line"><span class="number">00007f</span>fd30f0d128:  <span class="number">000000000069</span>c31c  <span class="number">00007f</span>fd30f0d1a8</span><br><span class="line"><span class="number">00007f</span>fd30f0d138:  <span class="number">000000000045814</span>e &lt;runtime.callCgoMmap+<span class="number">62</span>&gt;  <span class="number">00007f</span>fd30f0d140</span><br><span class="line"><span class="number">00007f</span>fd30f0d148:  <span class="number">00007f</span>fd30f0d190  <span class="number">0000000000411</span>a88 &lt;runtime.persistentalloc1+<span class="number">456</span>&gt;</span><br><span class="line"><span class="number">00007f</span>fd30f0d158:  <span class="number">0000000000</span>bf6dd0  <span class="number">0000000000000000</span></span><br><span class="line"><span class="number">00007f</span>fd30f0d168:  <span class="number">0000000000010000</span>  <span class="number">0000000000000008</span></span><br><span class="line"><span class="number">00007f</span>fd30f0d178:  <span class="number">0000000000</span>bf6dd8  <span class="number">0000000000</span>bf7ca0</span><br><span class="line"><span class="number">00007f</span>fd30f0d188:  <span class="number">00007f</span>dcbb4b7000  <span class="number">00007f</span>fd30f0d1c8</span><br><span class="line"><span class="number">00007f</span>fd30f0d198:  <span class="number">0000000000451205</span> &lt;runtime.persistentalloc.func1+<span class="number">69</span>&gt;  <span class="number">0000000000000000</span></span><br><span class="line"><span class="number">00007f</span>fd30f0d1a8:  <span class="number">0000000000000000</span>  <span class="number">0000000000</span>c1c080</span><br><span class="line"><span class="number">00007f</span>fd30f0d1b8:  <span class="number">00007f</span>dcbb4b7000  <span class="number">00007f</span>fd30f0d1e0</span><br><span class="line"><span class="number">00007f</span>fd30f0d1c8:  <span class="number">00007f</span>fd30f0d210  <span class="number">00007f</span>fd30f0d220</span><br><span class="line"><span class="number">00007f</span>fd30f0d1d8:  <span class="number">0000000000000000</span>  <span class="number">00000000000000f</span>1</span><br><span class="line"><span class="number">00007f</span>fd30f0d1e8:  <span class="number">0000000000000011</span>  <span class="number">0000000000000000</span></span><br><span class="line"><span class="number">00007f</span>fd30f0d1f8:  <span class="number">000000000069</span>c31c  <span class="number">0000000000</span>c1c080</span><br><span class="line"><span class="number">00007f</span>fd30f0d208:  <span class="number">000000000045814</span>e &lt;runtime.callCgoMmap+<span class="number">62</span>&gt;  <span class="number">00007f</span>fd30f0d210</span><br><span class="line"><span class="number">00007f</span>fd30f0d218: &lt;<span class="number">00007f</span>fd30f0d268  fffffffe7fffffff</span><br><span class="line"><span class="number">00007f</span>fd30f0d228:  ffffffffffffffff  ffffffffffffffff</span><br><span class="line"><span class="number">00007f</span>fd30f0d238:  ffffffffffffffff  ffffffffffffffff</span><br><span class="line"><span class="number">00007f</span>fd30f0d248:  ffffffffffffffff  ffffffffffffffff</span><br><span class="line"><span class="number">00007f</span>fd30f0d258:  ffffffffffffffff  ffffffffffffffff</span><br><span class="line"><span class="number">00007f</span>fd30f0d268:  ffffffffffffffff  ffffffffffffffff</span><br><span class="line"><span class="number">00007f</span>fd30f0d278:  ffffffffffffffff  ffffffffffffffff</span><br><span class="line"><span class="number">00007f</span>fd30f0d288:  ffffffffffffffff  ffffffffffffffff</span><br><span class="line"><span class="number">00007f</span>fd30f0d298:  ffffffffffffffff  <span class="number">0000000000000000</span></span><br><span class="line"><span class="number">00007f</span>fd30f0d2a8:  <span class="number">00000000006</span>b68ba  <span class="number">0000000000000020</span></span><br><span class="line"><span class="number">00007f</span>fd30f0d2b8:  <span class="number">0000000000000000</span>  <span class="number">0000000000000000</span></span><br><span class="line"><span class="number">00007f</span>fd30f0d2c8:  <span class="number">0000000000000000</span>  <span class="number">0000000000000000</span></span><br><span class="line"><span class="number">00007f</span>fd30f0d2d8:  <span class="number">0000000000000000</span>  <span class="number">0000000000000000</span></span><br><span class="line"><span class="number">00007f</span>fd30f0d2e8:  <span class="number">0000000000000000</span>  <span class="number">0000000000000000</span></span><br><span class="line"><span class="number">00007f</span>fd30f0d2f8:  <span class="number">0000000000000000</span>  <span class="number">0000000000000000</span></span><br><span class="line"><span class="number">00007f</span>fd30f0d308:  <span class="number">0000000000000000</span>  <span class="number">0000000000000000</span></span><br><span class="line">runtime: unknown pc <span class="number">0x6b657e</span></span><br><span class="line">stack: frame=&#123;sp:<span class="number">0x7ffd30f0d218</span>, fp:<span class="number">0x0</span>&#125; stack=[<span class="number">0x7ffd2ab0e738</span>,<span class="number">0x7ffd30f0d760</span>)</span><br><span class="line"><span class="number">00007f</span>fd30f0d118:  <span class="number">0000000000000002</span>  <span class="number">00007f</span>fd30f7f184</span><br><span class="line"><span class="number">00007f</span>fd30f0d128:  <span class="number">000000000069</span>c31c  <span class="number">00007f</span>fd30f0d1a8</span><br><span class="line"><span class="number">00007f</span>fd30f0d138:  <span class="number">000000000045814</span>e &lt;runtime.callCgoMmap+<span class="number">62</span>&gt;  <span class="number">00007f</span>fd30f0d140</span><br><span class="line"><span class="number">00007f</span>fd30f0d148:  <span class="number">00007f</span>fd30f0d190  <span class="number">0000000000411</span>a88 &lt;runtime.persistentalloc1+<span class="number">456</span>&gt;</span><br><span class="line"><span class="number">00007f</span>fd30f0d158:  <span class="number">0000000000</span>bf6dd0  <span class="number">0000000000000000</span></span><br><span class="line"><span class="number">00007f</span>fd30f0d168:  <span class="number">0000000000010000</span>  <span class="number">0000000000000008</span></span><br><span class="line"><span class="number">00007f</span>fd30f0d178:  <span class="number">0000000000</span>bf6dd8  <span class="number">0000000000</span>bf7ca0</span><br><span class="line"><span class="number">00007f</span>fd30f0d188:  <span class="number">00007f</span>dcbb4b7000  <span class="number">00007f</span>fd30f0d1c8</span><br><span class="line"><span class="number">00007f</span>fd30f0d198:  <span class="number">0000000000451205</span> &lt;runtime.persistentalloc.func1+<span class="number">69</span>&gt;  <span class="number">0000000000000000</span></span><br><span class="line"><span class="number">00007f</span>fd30f0d1a8:  <span class="number">0000000000000000</span>  <span class="number">0000000000</span>c1c080</span><br><span class="line"><span class="number">00007f</span>fd30f0d1b8:  <span class="number">00007f</span>dcbb4b7000  <span class="number">00007f</span>fd30f0d1e0</span><br><span class="line"><span class="number">00007f</span>fd30f0d1c8:  <span class="number">00007f</span>fd30f0d210  <span class="number">00007f</span>fd30f0d220</span><br><span class="line"><span class="number">00007f</span>fd30f0d1d8:  <span class="number">0000000000000000</span>  <span class="number">00000000000000f</span>1</span><br><span class="line"><span class="number">00007f</span>fd30f0d1e8:  <span class="number">0000000000000011</span>  <span class="number">0000000000000000</span></span><br><span class="line"><span class="number">00007f</span>fd30f0d1f8:  <span class="number">000000000069</span>c31c  <span class="number">0000000000</span>c1c080</span><br><span class="line"><span class="number">00007f</span>fd30f0d208:  <span class="number">000000000045814</span>e &lt;runtime.callCgoMmap+<span class="number">62</span>&gt;  <span class="number">00007f</span>fd30f0d210</span><br><span class="line"><span class="number">00007f</span>fd30f0d218: &lt;<span class="number">00007f</span>fd30f0d268  fffffffe7fffffff</span><br><span class="line"><span class="number">00007f</span>fd30f0d228:  ffffffffffffffff  ffffffffffffffff</span><br><span class="line"><span class="number">00007f</span>fd30f0d238:  ffffffffffffffff  ffffffffffffffff</span><br><span class="line"><span class="number">00007f</span>fd30f0d248:  ffffffffffffffff  ffffffffffffffff</span><br><span class="line"><span class="number">00007f</span>fd30f0d258:  ffffffffffffffff  ffffffffffffffff</span><br><span class="line"><span class="number">00007f</span>fd30f0d268:  ffffffffffffffff  ffffffffffffffff</span><br><span class="line"><span class="number">00007f</span>fd30f0d278:  ffffffffffffffff  ffffffffffffffff</span><br><span class="line"><span class="number">00007f</span>fd30f0d288:  ffffffffffffffff  ffffffffffffffff</span><br><span class="line"><span class="number">00007f</span>fd30f0d298:  ffffffffffffffff  <span class="number">0000000000000000</span></span><br><span class="line"><span class="number">00007f</span>fd30f0d2a8:  <span class="number">00000000006</span>b68ba  <span class="number">0000000000000020</span></span><br><span class="line"><span class="number">00007f</span>fd30f0d2b8:  <span class="number">0000000000000000</span>  <span class="number">0000000000000000</span></span><br><span class="line"><span class="number">00007f</span>fd30f0d2c8:  <span class="number">0000000000000000</span>  <span class="number">0000000000000000</span></span><br><span class="line"><span class="number">00007f</span>fd30f0d2d8:  <span class="number">0000000000000000</span>  <span class="number">0000000000000000</span></span><br><span class="line"><span class="number">00007f</span>fd30f0d2e8:  <span class="number">0000000000000000</span>  <span class="number">0000000000000000</span></span><br><span class="line"><span class="number">00007f</span>fd30f0d2f8:  <span class="number">0000000000000000</span>  <span class="number">0000000000000000</span></span><br><span class="line"><span class="number">00007f</span>fd30f0d308:  <span class="number">0000000000000000</span>  <span class="number">0000000000000000</span></span><br><span class="line"></span><br><span class="line">goroutine <span class="number">1</span> [running]:</span><br><span class="line">runtime.systemstack_switch()</span><br><span class="line">	/usr/local/go/src/runtime/asm_amd64.s:<span class="number">363</span> fp=<span class="number">0xc4200fe788</span> sp=<span class="number">0xc4200fe780</span> pc=<span class="number">0x454120</span></span><br><span class="line">runtime.main()</span><br><span class="line">	/usr/local/go/src/runtime/proc.go:<span class="number">128</span> +<span class="number">0x63</span> fp=<span class="number">0xc4200fe7e0</span> sp=<span class="number">0xc4200fe788</span> pc=<span class="number">0x42bb83</span></span><br><span class="line">runtime.goexit()</span><br><span class="line">	/usr/local/go/src/runtime/asm_amd64.s:<span class="number">2361</span> +<span class="number">0x1</span> fp=<span class="number">0xc4200fe7e8</span> sp=<span class="number">0xc4200fe7e0</span> pc=<span class="number">0x456c91</span></span><br><span class="line"></span><br><span class="line">rax    <span class="number">0x0</span></span><br><span class="line">rbx    <span class="number">0xbe2978</span></span><br><span class="line">rcx    <span class="number">0x6b657e</span></span><br><span class="line">rdx    <span class="number">0x0</span></span><br><span class="line">rdi    <span class="number">0x2</span></span><br><span class="line">rsi    <span class="number">0x7ffd30f0d1a0</span></span><br><span class="line">rbp    <span class="number">0x8347ce</span></span><br><span class="line">rsp    <span class="number">0x7ffd30f0d218</span></span><br><span class="line">r8     <span class="number">0x0</span></span><br><span class="line">r9     <span class="number">0x6</span></span><br><span class="line">r10    <span class="number">0x8</span></span><br><span class="line">r11    <span class="number">0x246</span></span><br><span class="line">r12    <span class="number">0x2bedc30</span></span><br><span class="line">r13    <span class="number">0xf1</span></span><br><span class="line">r14    <span class="number">0x11</span></span><br><span class="line">r15    <span class="number">0x0</span></span><br><span class="line">rip    <span class="number">0x6b657e</span></span><br><span class="line">rflags <span class="number">0x246</span></span><br><span class="line">cs     <span class="number">0x33</span></span><br><span class="line">fs     <span class="number">0x0</span></span><br><span class="line">gs     <span class="number">0x0</span></span><br><span class="line">exec failed: container_linux.go:<span class="number">348</span>: starting container process caused <span class="string">&quot;read init-p: connection reset by peer&quot;</span></span><br></pre></td></tr></table></figure>
+
+<p>由上可知，异常是runc返回的。</p>
+<h4 id="定位原因"><a href="#定位原因" class="headerlink" title="定位原因"></a>定位原因</h4><p>定位异常组件的同时，runc还给了我们一个惊喜：提供了详细的异常日志。</p>
+<p>异常日志表明：runc exec失败的原因是因为 <code>Resource temporarily unavailable</code>，比较典型的资源不足问题。而常见的资源不足类型主要包含（ulimit -a）：</p>
+<ul>
+<li>线程数达到限制</li>
+<li>文件数达到限制</li>
+<li>内存达到限制</li>
+</ul>
+<p>因此，我们需要进一步排查业务容器的监控，以定位不足的资源类型。</p>
+<p><img src="thread-monitor.png" alt="业务线程数监控指标"></p>
+<p>上图展示了业务容器的线程数监控。所有容器的线程数都已经达到1w，而弹性云默认限制容器的线程数上限就是1w，设定该上限的原因，也是为了避免单容器线程泄漏而耗尽宿主机的线程资源。</p>
+<figure class="highlight gradle"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"># cat <span class="regexp">/sys/</span>fs<span class="regexp">/cgroup/</span>pids<span class="regexp">/kubepods/</span>burstable<span class="regexp">/pod64a6c0e7-830c-11eb-86d6-b8cef604db88/</span>aa1e331ec24f621ab3152ebe94f1e533734164af86c9df0f551eab2b1967ec4e/pids.max</span><br><span class="line"><span class="number">10000</span></span><br></pre></td></tr></table></figure>
+
+<p>至此，问题的原因已定位清楚，对，就是这么简单。</p>
+<h3 id="runc梳理"><a href="#runc梳理" class="headerlink" title="runc梳理"></a>runc梳理</h3><p>虽然，我们已经定位了异常日志的成因，但是，对于runc的具体工作机制，一直只有一个模糊的概念。</p>
+<p>趁此机会，我们以runc exec为例，梳理runc的工作流程。</p>
+<ul>
+<li>runc exec首先启动子进程runc init</li>
+<li>runc init负责初始化容器namespace<ul>
+<li>runc init利用C语言的constructor特性，实现在go代码启动之前，设置容器namespace</li>
+<li>C代码nsexec执行两次clone，共三个线程：父进程，子进程，孙进程，完成对容器namespace的初始化</li>
+<li>父进程与子进程完成初始化任务后退出，此时，孙进程已经在容器namespace内，孙进程开始执行go代码初始化，并等待接收runc exec发送配置</li>
+</ul>
+</li>
+<li>runc exec将孙进程添加到容器cgroup</li>
+<li>runc exec发送配置给孙进程，配置主要包含：exec的具体命令与参数等</li>
+<li>孙进程调用system.Execv执行用户命令</li>
+</ul>
+<p>注意：</p>
+<ul>
+<li>步骤2.c与步骤3是并发执行的</li>
+<li>runc exec与runc init通信基于socket pair对（init-p和init-c）</li>
+</ul>
+<p>runc exec过程中各进程的交互流程，以及namespace与cgroup的初始化参见下图：</p>
+<p><img src="runc-detail.png" alt="runc工作流程"></p>
+<p>综合我们对runc exec执行流程的梳理，以及runc exec返回的错误信息，我们基本定位到了runc exec返回错误的代码：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(p *setnsProcess)</span> <span class="title">start</span><span class="params">()</span> <span class="params">(err error)</span></span> &#123;</span><br><span class="line">   <span class="keyword">defer</span> p.parentPipe.Close()</span><br><span class="line">   err = p.cmd.Start()</span><br><span class="line">   p.childPipe.Close()</span><br><span class="line">   <span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">      <span class="keyword">return</span> newSystemErrorWithCause(err, <span class="string">&quot;starting setns process&quot;</span>)</span><br><span class="line">   &#125;</span><br><span class="line">   <span class="keyword">if</span> p.bootstrapData != <span class="literal">nil</span> &#123;</span><br><span class="line">      <span class="keyword">if</span> _, err := io.Copy(p.parentPipe, p.bootstrapData); err != <span class="literal">nil</span> &#123;       <span class="comment">// clone标志位，ns配置</span></span><br><span class="line">         <span class="keyword">return</span> newSystemErrorWithCause(err, <span class="string">&quot;copying bootstrap data to pipe&quot;</span>)</span><br><span class="line">      &#125;</span><br><span class="line">   &#125;</span><br><span class="line">   <span class="keyword">if</span> err = p.execSetns(); err != <span class="literal">nil</span> &#123;</span><br><span class="line">      <span class="keyword">return</span> newSystemErrorWithCause(err, <span class="string">&quot;executing setns process&quot;</span>)</span><br><span class="line">   &#125;</span><br><span class="line">   <span class="keyword">if</span> <span class="built_in">len</span>(p.cgroupPaths) &gt; <span class="number">0</span> &#123;</span><br><span class="line">      <span class="keyword">if</span> err := cgroups.EnterPid(p.cgroupPaths, p.pid()); err != <span class="literal">nil</span> &#123;        <span class="comment">// 这里将runc init添加到容器cgroup中</span></span><br><span class="line">         <span class="keyword">return</span> newSystemErrorWithCausef(err, <span class="string">&quot;adding pid %d to cgroups&quot;</span>, p.pid())</span><br><span class="line">      &#125;</span><br><span class="line">   &#125;</span><br><span class="line">   <span class="keyword">if</span> err := utils.WriteJSON(p.parentPipe, p.config); err != <span class="literal">nil</span> &#123;            <span class="comment">// 发送配置：命令、环境变量等</span></span><br><span class="line">      <span class="keyword">return</span> newSystemErrorWithCause(err, <span class="string">&quot;writing config to pipe&quot;</span>)</span><br><span class="line">   &#125;</span><br><span class="line"></span><br><span class="line">   ierr := parseSync(p.parentPipe, <span class="function"><span class="keyword">func</span><span class="params">(sync *syncT)</span> <span class="title">error</span></span> &#123;                  <span class="comment">// 这里返回 read init-p: connection reset by peer</span></span><br><span class="line">      <span class="keyword">switch</span> sync.Type &#123;</span><br><span class="line">      <span class="keyword">case</span> procReady:</span><br><span class="line">         <span class="comment">// This shouldn&#x27;t happen.</span></span><br><span class="line">         <span class="built_in">panic</span>(<span class="string">&quot;unexpected procReady in setns&quot;</span>)</span><br><span class="line">      <span class="keyword">case</span> procHooks:</span><br><span class="line">         <span class="comment">// This shouldn&#x27;t happen.</span></span><br><span class="line">         <span class="built_in">panic</span>(<span class="string">&quot;unexpected procHooks in setns&quot;</span>)</span><br><span class="line">      <span class="keyword">default</span>:</span><br><span class="line">         <span class="keyword">return</span> newSystemError(fmt.Errorf(<span class="string">&quot;invalid JSON payload from child&quot;</span>))</span><br><span class="line">      &#125;</span><br><span class="line">   &#125;)</span><br><span class="line">   <span class="keyword">if</span> ierr != <span class="literal">nil</span> &#123;</span><br><span class="line">      p.wait()</span><br><span class="line">      <span class="keyword">return</span> ierr</span><br><span class="line">   &#125;</span><br><span class="line">   <span class="keyword">return</span> <span class="literal">nil</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>现在，问题的成因与代码分析已全部完成。</p>
+<h3 id="Reference"><a href="#Reference" class="headerlink" title="Reference"></a>Reference</h3><ol>
+<li><a target="_blank" rel="noopener" href="https://www.kernel.org/doc/Documentation/cgroup-v1/pids.txt">https://www.kernel.org/doc/Documentation/cgroup-v1/pids.txt</a></li>
+<li><a target="_blank" rel="noopener" href="https://github.com/opencontainers/runc">https://github.com/opencontainers/runc</a></li>
+</ol>
+
+      
+    </div>
+    
+    
+    
+
+    
+
+    
+      <div>
+        <div style="padding: 10px 0; margin: 20px auto; width: 90%; text-align: center;">
+  <div>坚持原创技术分享，您的支持将鼓励我继续创作！</div>
+  <button id="rewardButton" disable="enable" onclick="var qr = document.getElementById('QR'); if (qr.style.display === 'none') {qr.style.display='block';} else {qr.style.display='none'}">
+    <span>打赏</span>
+  </button>
+  <div id="QR" style="display: none;">
+
+    
+      <div id="wechat" style="display: inline-block">
+        <img id="wechat_qr" src="/images/wechatpay.png" alt=" 微信支付"/>
+        <p>微信支付</p>
+      </div>
+    
+
+    
+
+    
+
+  </div>
+</div>
+
+      </div>
+    
+
+    
+
+    <footer class="post-footer">
+      
+        <div class="post-tags">
+          
+            <a href="/tags/docker/" rel="tag"># docker</a>
+          
+            <a href="/tags/containerd/" rel="tag"># containerd</a>
+          
+            <a href="/tags/runc/" rel="tag"># runc</a>
+          
+        </div>
+      
+
+      
+      
+      
+
+      
+        <div class="post-nav">
+          <div class="post-nav-next post-nav-item">
+            
+              <a href="/%E5%88%A0%E9%99%A4%E5%AE%B9%E5%99%A8%E6%8A%A5%E9%94%99-device-or-resource-busy-%E9%97%AE%E9%A2%98%E6%8E%92%E6%9F%A5%E4%B9%8B%E6%97%85/" rel="next" title="删除容器报错 device or resource busy 问题排查之旅">
+                <i class="fa fa-chevron-left"></i> 删除容器报错 device or resource busy 问题排查之旅
+              </a>
+            
+          </div>
+
+          <span class="post-nav-divider"></span>
+
+          <div class="post-nav-prev post-nav-item">
+            
+          </div>
+        </div>
+      
+
+      
+      
+    </footer>
+  </div>
+  
+  
+  
+  </article>
+
+
+
+    <div class="post-spread">
+      
+    </div>
+  </div>
+
+
+          </div>
+          
+
+
+          
+
+  
+    <div class="comments" id="comments">
+      <div id="gitalk-container"></div>
+    </div>
+
+  
+
+
+
+        </div>
+        
+          
+  
+  <div class="sidebar-toggle">
+    <div class="sidebar-toggle-line-wrap">
+      <span class="sidebar-toggle-line sidebar-toggle-line-first"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-middle"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-last"></span>
+    </div>
+  </div>
+
+  <aside id="sidebar" class="sidebar">
+    
+    <div class="sidebar-inner">
+
+      
+
+      
+        <ul class="sidebar-nav motion-element">
+          <li class="sidebar-nav-toc sidebar-nav-active" data-target="post-toc-wrap">
+            文章目录
+          </li>
+          <li class="sidebar-nav-overview" data-target="site-overview-wrap">
+            站点概览
+          </li>
+        </ul>
+      
+
+      <section class="site-overview-wrap sidebar-panel">
+        <div class="site-overview">
+          <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+            
+              <p class="site-author-name" itemprop="name"></p>
+              <p class="site-description motion-element" itemprop="description"></p>
+          </div>
+
+          <nav class="site-state motion-element">
+
+            
+              <div class="site-state-item site-state-posts">
+              
+                <a href="/archives">
+              
+                  <span class="site-state-item-count">8</span>
+                  <span class="site-state-item-name">日志</span>
+                </a>
+              </div>
+            
+
+            
+              
+              
+              <div class="site-state-item site-state-categories">
+                
+                  <span class="site-state-item-count">2</span>
+                  <span class="site-state-item-name">分类</span>
+                
+              </div>
+            
+
+            
+              
+              
+              <div class="site-state-item site-state-tags">
+                
+                  <span class="site-state-item-count">8</span>
+                  <span class="site-state-item-name">标签</span>
+                
+              </div>
+            
+
+          </nav>
+
+          
+            <div class="feed-link motion-element">
+              <a href="/atom.xml" rel="alternate">
+                <i class="fa fa-rss"></i>
+                RSS
+              </a>
+            </div>
+          
+
+          
+            <div class="links-of-author motion-element">
+                
+                  <span class="links-of-author-item">
+                    <a href="https://github.com/plpan" target="_blank" title="GitHub">
+                      GitHub</a>
+                  </span>
+                
+            </div>
+          
+
+          
+          
+
+          
+          
+
+          
+
+        </div>
+      </section>
+
+      
+      <!--noindex-->
+        <section class="post-toc-wrap motion-element sidebar-panel sidebar-panel-active">
+          <div class="post-toc">
+
+            
+              
+            
+
+            
+              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E9%97%AE%E9%A2%98%E6%8F%8F%E8%BF%B0"><span class="nav-text">问题描述</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E9%97%AE%E9%A2%98%E6%8E%92%E6%9F%A5"><span class="nav-text">问题排查</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#%E5%AE%9A%E4%BD%8D%E7%BB%84%E4%BB%B6"><span class="nav-text">定位组件</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#%E5%AE%9A%E4%BD%8D%E5%8E%9F%E5%9B%A0"><span class="nav-text">定位原因</span></a></li></ol></li><li class="nav-item nav-level-3"><a class="nav-link" href="#runc%E6%A2%B3%E7%90%86"><span class="nav-text">runc梳理</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#Reference"><span class="nav-text">Reference</span></a></li></ol></div>
+            
+
+          </div>
+        </section>
+      <!--/noindex-->
+      
+
+      
+
+    </div>
+  </aside>
+
+
+        
+      </div>
+    </main>
+
+    <footer id="footer" class="footer">
+      <div class="footer-inner">
+        <div class="copyright">&copy; <span itemprop="copyrightYear">2021</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">plpan</span>
+
+  
+</div>
+
+
+
+
+
+
+
+
+
+        
+
+
+
+
+
+
+
+        
+      </div>
+    </footer>
+
+    
+      <div class="back-to-top">
+        <i class="fa fa-arrow-up"></i>
+        
+      </div>
+    
+
+    
+
+  </div>
+
+  
+
+<script type="text/javascript">
+  if (Object.prototype.toString.call(window.Promise) !== '[object Function]') {
+    window.Promise = null;
+  }
+</script>
+
+
+
+
+
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+  
+  
+    <script type="text/javascript" src="/lib/jquery/index.js?v=2.1.3"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/fastclick/lib/fastclick.min.js?v=1.0.6"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/jquery_lazyload/jquery.lazyload.js?v=1.9.7"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/velocity/velocity.min.js?v=1.2.1"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/velocity/velocity.ui.min.js?v=1.2.1"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/fancybox/source/jquery.fancybox.pack.js?v=2.1.5"></script>
+  
+
+
+  
+
+
+  <script type="text/javascript" src="/js/src/utils.js?v=5.1.4"></script>
+
+  <script type="text/javascript" src="/js/src/motion.js?v=5.1.4"></script>
+
+
+
+  
+  
+
+  
+  <script type="text/javascript" src="/js/src/scrollspy.js?v=5.1.4"></script>
+<script type="text/javascript" src="/js/src/post-details.js?v=5.1.4"></script>
+
+
+
+  
+
+
+  <script type="text/javascript" src="/js/src/bootstrap.js?v=5.1.4"></script>
+
+
+
+  
+
+
+  
+
+
+
+
+	
+
+
+
+
+
+  
+
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+  <link rel="stylesheet" href="https://unpkg.com/gitalk/dist/gitalk.css">
+  <script src="https://unpkg.com/gitalk/dist/gitalk.min.js"></script>
+  <script type="text/javascript">
+    var gitalk = new Gitalk({
+      clientID: '334a8866f390a4eaaba2',
+      clientSecret: '33515b0cbae23af154a4b0c1cd30bcdc3e52df87',
+      repo: 'gitalk',
+      owner: 'plpan',
+      admin: ['plpan'],
+      id:'20210513194351',
+      labels: ''.split(',').filter(l => l),
+      perPage: 10,
+      createIssueManually: false
+    })
+    gitalk.render('gitalk-container')           
+  </script>
+
+  
+
+  <script type="text/javascript">
+    // Popup Window;
+    var isfetched = false;
+    var isXml = true;
+    // Search DB path;
+    var search_path = "search.xml";
+    if (search_path.length === 0) {
+      search_path = "search.xml";
+    } else if (/json$/i.test(search_path)) {
+      isXml = false;
+    }
+    var path = "/" + search_path;
+    // monitor main search box;
+
+    var onPopupClose = function (e) {
+      $('.popup').hide();
+      $('#local-search-input').val('');
+      $('.search-result-list').remove();
+      $('#no-result').remove();
+      $(".local-search-pop-overlay").remove();
+      $('body').css('overflow', '');
+    }
+
+    function proceedsearch() {
+      $("body")
+        .append('<div class="search-popup-overlay local-search-pop-overlay"></div>')
+        .css('overflow', 'hidden');
+      $('.search-popup-overlay').click(onPopupClose);
+      $('.popup').toggle();
+      var $localSearchInput = $('#local-search-input');
+      $localSearchInput.attr("autocapitalize", "none");
+      $localSearchInput.attr("autocorrect", "off");
+      $localSearchInput.focus();
+    }
+
+    // search function;
+    var searchFunc = function(path, search_id, content_id) {
+      'use strict';
+
+      // start loading animation
+      $("body")
+        .append('<div class="search-popup-overlay local-search-pop-overlay">' +
+          '<div id="search-loading-icon">' +
+          '<i class="fa fa-spinner fa-pulse fa-5x fa-fw"></i>' +
+          '</div>' +
+          '</div>')
+        .css('overflow', 'hidden');
+      $("#search-loading-icon").css('margin', '20% auto 0 auto').css('text-align', 'center');
+
+      $.ajax({
+        url: path,
+        dataType: isXml ? "xml" : "json",
+        async: true,
+        success: function(res) {
+          // get the contents from search data
+          isfetched = true;
+          $('.popup').detach().appendTo('.header-inner');
+          var datas = isXml ? $("entry", res).map(function() {
+            return {
+              title: $("title", this).text(),
+              content: $("content",this).text(),
+              url: $("url" , this).text()
+            };
+          }).get() : res;
+          var input = document.getElementById(search_id);
+          var resultContent = document.getElementById(content_id);
+          var inputEventFunction = function() {
+            var searchText = input.value.trim().toLowerCase();
+            var keywords = searchText.split(/[\s\-]+/);
+            if (keywords.length > 1) {
+              keywords.push(searchText);
+            }
+            var resultItems = [];
+            if (searchText.length > 0) {
+              // perform local searching
+              datas.forEach(function(data) {
+                var isMatch = false;
+                var hitCount = 0;
+                var searchTextCount = 0;
+                var title = data.title.trim();
+                var titleInLowerCase = title.toLowerCase();
+                var content = data.content.trim().replace(/<[^>]+>/g,"");
+                var contentInLowerCase = content.toLowerCase();
+                var articleUrl = decodeURIComponent(data.url);
+                var indexOfTitle = [];
+                var indexOfContent = [];
+                // only match articles with not empty titles
+                if(title != '') {
+                  keywords.forEach(function(keyword) {
+                    function getIndexByWord(word, text, caseSensitive) {
+                      var wordLen = word.length;
+                      if (wordLen === 0) {
+                        return [];
+                      }
+                      var startPosition = 0, position = [], index = [];
+                      if (!caseSensitive) {
+                        text = text.toLowerCase();
+                        word = word.toLowerCase();
+                      }
+                      while ((position = text.indexOf(word, startPosition)) > -1) {
+                        index.push({position: position, word: word});
+                        startPosition = position + wordLen;
+                      }
+                      return index;
+                    }
+
+                    indexOfTitle = indexOfTitle.concat(getIndexByWord(keyword, titleInLowerCase, false));
+                    indexOfContent = indexOfContent.concat(getIndexByWord(keyword, contentInLowerCase, false));
+                  });
+                  if (indexOfTitle.length > 0 || indexOfContent.length > 0) {
+                    isMatch = true;
+                    hitCount = indexOfTitle.length + indexOfContent.length;
+                  }
+                }
+
+                // show search results
+
+                if (isMatch) {
+                  // sort index by position of keyword
+
+                  [indexOfTitle, indexOfContent].forEach(function (index) {
+                    index.sort(function (itemLeft, itemRight) {
+                      if (itemRight.position !== itemLeft.position) {
+                        return itemRight.position - itemLeft.position;
+                      } else {
+                        return itemLeft.word.length - itemRight.word.length;
+                      }
+                    });
+                  });
+
+                  // merge hits into slices
+
+                  function mergeIntoSlice(text, start, end, index) {
+                    var item = index[index.length - 1];
+                    var position = item.position;
+                    var word = item.word;
+                    var hits = [];
+                    var searchTextCountInSlice = 0;
+                    while (position + word.length <= end && index.length != 0) {
+                      if (word === searchText) {
+                        searchTextCountInSlice++;
+                      }
+                      hits.push({position: position, length: word.length});
+                      var wordEnd = position + word.length;
+
+                      // move to next position of hit
+
+                      index.pop();
+                      while (index.length != 0) {
+                        item = index[index.length - 1];
+                        position = item.position;
+                        word = item.word;
+                        if (wordEnd > position) {
+                          index.pop();
+                        } else {
+                          break;
+                        }
+                      }
+                    }
+                    searchTextCount += searchTextCountInSlice;
+                    return {
+                      hits: hits,
+                      start: start,
+                      end: end,
+                      searchTextCount: searchTextCountInSlice
+                    };
+                  }
+
+                  var slicesOfTitle = [];
+                  if (indexOfTitle.length != 0) {
+                    slicesOfTitle.push(mergeIntoSlice(title, 0, title.length, indexOfTitle));
+                  }
+
+                  var slicesOfContent = [];
+                  while (indexOfContent.length != 0) {
+                    var item = indexOfContent[indexOfContent.length - 1];
+                    var position = item.position;
+                    var word = item.word;
+                    // cut out 100 characters
+                    var start = position - 20;
+                    var end = position + 80;
+                    if(start < 0){
+                      start = 0;
+                    }
+                    if (end < position + word.length) {
+                      end = position + word.length;
+                    }
+                    if(end > content.length){
+                      end = content.length;
+                    }
+                    slicesOfContent.push(mergeIntoSlice(content, start, end, indexOfContent));
+                  }
+
+                  // sort slices in content by search text's count and hits' count
+
+                  slicesOfContent.sort(function (sliceLeft, sliceRight) {
+                    if (sliceLeft.searchTextCount !== sliceRight.searchTextCount) {
+                      return sliceRight.searchTextCount - sliceLeft.searchTextCount;
+                    } else if (sliceLeft.hits.length !== sliceRight.hits.length) {
+                      return sliceRight.hits.length - sliceLeft.hits.length;
+                    } else {
+                      return sliceLeft.start - sliceRight.start;
+                    }
+                  });
+
+                  // select top N slices in content
+
+                  var upperBound = parseInt('1');
+                  if (upperBound >= 0) {
+                    slicesOfContent = slicesOfContent.slice(0, upperBound);
+                  }
+
+                  // highlight title and content
+
+                  function highlightKeyword(text, slice) {
+                    var result = '';
+                    var prevEnd = slice.start;
+                    slice.hits.forEach(function (hit) {
+                      result += text.substring(prevEnd, hit.position);
+                      var end = hit.position + hit.length;
+                      result += '<b class="search-keyword">' + text.substring(hit.position, end) + '</b>';
+                      prevEnd = end;
+                    });
+                    result += text.substring(prevEnd, slice.end);
+                    return result;
+                  }
+
+                  var resultItem = '';
+
+                  if (slicesOfTitle.length != 0) {
+                    resultItem += "<li><a href='" + articleUrl + "' class='search-result-title'>" + highlightKeyword(title, slicesOfTitle[0]) + "</a>";
+                  } else {
+                    resultItem += "<li><a href='" + articleUrl + "' class='search-result-title'>" + title + "</a>";
+                  }
+
+                  slicesOfContent.forEach(function (slice) {
+                    resultItem += "<a href='" + articleUrl + "'>" +
+                      "<p class=\"search-result\">" + highlightKeyword(content, slice) +
+                      "...</p>" + "</a>";
+                  });
+
+                  resultItem += "</li>";
+                  resultItems.push({
+                    item: resultItem,
+                    searchTextCount: searchTextCount,
+                    hitCount: hitCount,
+                    id: resultItems.length
+                  });
+                }
+              })
+            };
+            if (keywords.length === 1 && keywords[0] === "") {
+              resultContent.innerHTML = '<div id="no-result"><i class="fa fa-search fa-5x" /></div>'
+            } else if (resultItems.length === 0) {
+              resultContent.innerHTML = '<div id="no-result"><i class="fa fa-frown-o fa-5x" /></div>'
+            } else {
+              resultItems.sort(function (resultLeft, resultRight) {
+                if (resultLeft.searchTextCount !== resultRight.searchTextCount) {
+                  return resultRight.searchTextCount - resultLeft.searchTextCount;
+                } else if (resultLeft.hitCount !== resultRight.hitCount) {
+                  return resultRight.hitCount - resultLeft.hitCount;
+                } else {
+                  return resultRight.id - resultLeft.id;
+                }
+              });
+              var searchResultList = '<ul class=\"search-result-list\">';
+              resultItems.forEach(function (result) {
+                searchResultList += result.item;
+              })
+              searchResultList += "</ul>";
+              resultContent.innerHTML = searchResultList;
+            }
+          }
+
+          if ('auto' === 'auto') {
+            input.addEventListener('input', inputEventFunction);
+          } else {
+            $('.search-icon').click(inputEventFunction);
+            input.addEventListener('keypress', function (event) {
+              if (event.keyCode === 13) {
+                inputEventFunction();
+              }
+            });
+          }
+
+          // remove loading animation
+          $(".local-search-pop-overlay").remove();
+          $('body').css('overflow', '');
+
+          proceedsearch();
+        }
+      });
+    }
+
+    // handle and trigger popup window;
+    $('.popup-trigger').click(function(e) {
+      e.stopPropagation();
+      if (isfetched === false) {
+        searchFunc(path, 'local-search-input', 'local-search-result');
+      } else {
+        proceedsearch();
+      };
+    });
+
+    $('.popup-btn-close').click(onPopupClose);
+    $('.popup').click(function(e){
+      e.stopPropagation();
+    });
+    $(document).on('keyup', function (event) {
+      var shouldDismissSearchPopup = event.which === 27 &&
+        $('.search-popup').is(':visible');
+      if (shouldDismissSearchPopup) {
+        onPopupClose();
+      }
+    });
+  </script>
+
+
+
+
+
+  
+
+  
+
+  
+
+  
+  
+
+  
+
+  
+
+  
+
+</body>
+</html>
