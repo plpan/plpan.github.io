@@ -90,7 +90,7 @@
 <meta property="og:locale">
 <meta property="og:image" content="https://plpan.github.io/pod-terminating-%E6%8E%92%E6%9F%A5%E4%B9%8B%E6%97%85-%E4%BA%8C/containerd-shim.png">
 <meta property="article:published_time" content="2021-06-24T08:39:23.000Z">
-<meta property="article:modified_time" content="2021-06-27T09:10:06.077Z">
+<meta property="article:modified_time" content="2021-06-27T09:13:44.685Z">
 <meta property="article:author" content="plpan">
 <meta property="article:tag" content="kubernetes">
 <meta property="article:tag" content="docker">
@@ -362,20 +362,20 @@
       
 
       
-        <h3 id="背景"><a href="#背景" class="headerlink" title="背景"></a>背景</h3><p>近期，线上报障了多起Pod删除失败的Case，用户的多次删除请求均已失败告终。Pod删除失败的影响主要有二：</p>
+        <h1 id="背景"><a href="#背景" class="headerlink" title="背景"></a>背景</h1><p>近期，线上报障了多起Pod删除失败的Case，用户的多次删除请求均已失败告终。Pod删除失败的影响主要有二：</p>
 <ul>
 <li>面向用户：用户体验下降，且无法对该Pod执行后续的发布流程</li>
 <li>面向弹性云：失败率提升，SLA无法达标</li>
 </ul>
 <p>并且，随着弹性云Docker版本升级 (1.13 → 18.06) 进度的推进，线上出现Pod删除失败的Case隐隐有增多的趋势。</p>
 <p>线上问题无小事！不论是从哪个角度出发，我们都应该给线上环境把把脉，看看是哪个系统出了问题。</p>
-<h3 id="问题定位"><a href="#问题定位" class="headerlink" title="问题定位"></a>问题定位</h3><p>由于线上出Case的频率并不低，基本每周都会出现，这反而给我们定位问题带来了便利^_^。</p>
+<h1 id="问题定位"><a href="#问题定位" class="headerlink" title="问题定位"></a>问题定位</h1><p>由于线上出Case的频率并不低，基本每周都会出现，这反而给我们定位问题带来了便利^_^。</p>
 <p>排查线上问题的思路一般分如下两个步骤：</p>
 <ul>
 <li>定位出现问题的组件</li>
 <li>定位组件出现的问题</li>
 </ul>
-<h4 id="组件定位"><a href="#组件定位" class="headerlink" title="组件定位"></a>组件定位</h4><p>对于弹性云的同学来说，定位问题组件已经有一套标准流程：从上往下，看看问题是由哪个组件引起。【不清楚组件通信流程的同学可以看看<a href="https://plpan.github.io/pod-terminating-%E6%8E%92%E6%9F%A5%E4%B9%8B%E6%97%85/">容器删除失败排查</a>】</p>
+<h2 id="组件定位"><a href="#组件定位" class="headerlink" title="组件定位"></a>组件定位</h2><p>对于弹性云的同学来说，定位问题组件已经有一套标准流程：从上往下，看看问题是由哪个组件引起。【不清楚组件通信流程的同学可以看看<a href="https://plpan.github.io/pod-terminating-%E6%8E%92%E6%9F%A5%E4%B9%8B%E6%97%85/">容器删除失败排查</a>】</p>
 <p>1）第一嫌疑人：kubelet</p>
 <p>在kubernetes体系架构下，删除Pod的执行者就是kubelet，作为第一个提审对象，它不冤。</p>
 <p>虽然无奈，但是kubelet也早已习惯了，并且在多次经历过社会的毒打之后，练就了一身的甩锅能力：</p>
@@ -415,7 +415,7 @@
 
 <p>同一个Pod内pause容器依然退出，但是业务容器却没有退出，并且业务容器关联的containerd-shim进程并未执行子进程收割动作，就像是卡住了。</p>
 <p>面对这些新证据，containerd-shim毫无征兆地崩溃了，大哭道：为什么总是我？</p>
-<h4 id="2-2-问题定位"><a href="#2-2-问题定位" class="headerlink" title="2.2 问题定位"></a>2.2 问题定位</h4><p>言归正传，我们如何能根据上述现象快速定位问题呢？思路有三：</p>
+<h2 id="问题定位-1"><a href="#问题定位-1" class="headerlink" title="问题定位"></a>问题定位</h2><p>言归正传，我们如何能根据上述现象快速定位问题呢？思路有三：</p>
 <ol>
 <li>拿着现象问谷歌</li>
 <li>带着问题看代码</li>
@@ -488,7 +488,7 @@
 <li>goroutine 1：往所有订阅方发送事件</li>
 </ul>
 <p>这三个协程形成了完美的死锁现场。</p>
-<h3 id="解决方案"><a href="#解决方案" class="headerlink" title="解决方案"></a>解决方案</h3><p>清楚了问题的成因之后，解决问题的方案也很简单，只需调整默认的订阅者信道大小即可。社区优化方案有二：</p>
+<h1 id="解决方案"><a href="#解决方案" class="headerlink" title="解决方案"></a>解决方案</h1><p>清楚了问题的成因之后，解决问题的方案也很简单，只需调整默认的订阅者信道大小即可。社区优化方案有二：</p>
 <ul>
 <li>调整信道大小，溢出事件自动忽略：<a target="_blank" rel="noopener" href="https://github.com/containerd/containerd/pull/2748/files">https://github.com/containerd/containerd/pull/2748/files</a></li>
 <li>优化锁逻辑：<a target="_blank" rel="noopener" href="https://github.com/containerd/containerd/pull/2743">https://github.com/containerd/containerd/pull/2743</a> 【好几个commit】</li>
@@ -714,7 +714,7 @@
             
 
             
-              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E8%83%8C%E6%99%AF"><span class="nav-text">背景</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E9%97%AE%E9%A2%98%E5%AE%9A%E4%BD%8D"><span class="nav-text">问题定位</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#%E7%BB%84%E4%BB%B6%E5%AE%9A%E4%BD%8D"><span class="nav-text">组件定位</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#2-2-%E9%97%AE%E9%A2%98%E5%AE%9A%E4%BD%8D"><span class="nav-text">2.2 问题定位</span></a></li></ol></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E8%A7%A3%E5%86%B3%E6%96%B9%E6%A1%88"><span class="nav-text">解决方案</span></a></li></ol></div>
+              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#%E8%83%8C%E6%99%AF"><span class="nav-text">背景</span></a></li><li class="nav-item nav-level-1"><a class="nav-link" href="#%E9%97%AE%E9%A2%98%E5%AE%9A%E4%BD%8D"><span class="nav-text">问题定位</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E7%BB%84%E4%BB%B6%E5%AE%9A%E4%BD%8D"><span class="nav-text">组件定位</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E9%97%AE%E9%A2%98%E5%AE%9A%E4%BD%8D-1"><span class="nav-text">问题定位</span></a></li></ol></li><li class="nav-item nav-level-1"><a class="nav-link" href="#%E8%A7%A3%E5%86%B3%E6%96%B9%E6%A1%88"><span class="nav-text">解决方案</span></a></li></ol></div>
             
 
           </div>
