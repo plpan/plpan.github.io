@@ -88,15 +88,15 @@
 <meta property="og:site_name" content="Stupig">
 <meta property="og:description" content="背景近期，线上报障了多起Pod删除失败的Case，用户的多次删除请求均已失败告终。Pod删除失败的影响主要有二：  面向用户：用户体验下降，且无法对该Pod执行后续的发布流程 面向弹性云：失败率提升，SLA无法达标  并且，随着弹性云Docker版本升级 (1.13 → 18.06) 进度的推进，线上出现Pod删除失败的Case隐隐有增多的趋势。 线上问题无小事！不论是从哪个角度出发，我们都应该给">
 <meta property="og:locale">
-<meta property="og:image" content="https://plpan.github.io/pod-terminating-%E6%8E%92%E6%9F%A5%E4%B9%8B%E6%97%85-%E4%BA%8C/containerd-shim">
+<meta property="og:image" content="https://plpan.github.io/pod-terminating-%E6%8E%92%E6%9F%A5%E4%B9%8B%E6%97%85-%E4%BA%8C/containerd-shim.png">
 <meta property="article:published_time" content="2021-06-24T08:39:23.000Z">
-<meta property="article:modified_time" content="2021-06-27T09:06:45.811Z">
+<meta property="article:modified_time" content="2021-06-27T09:10:06.077Z">
 <meta property="article:author" content="plpan">
 <meta property="article:tag" content="kubernetes">
 <meta property="article:tag" content="docker">
 <meta property="article:tag" content="containers">
 <meta name="twitter:card" content="summary">
-<meta name="twitter:image" content="https://plpan.github.io/pod-terminating-%E6%8E%92%E6%9F%A5%E4%B9%8B%E6%97%85-%E4%BA%8C/containerd-shim">
+<meta name="twitter:image" content="https://plpan.github.io/pod-terminating-%E6%8E%92%E6%9F%A5%E4%B9%8B%E6%97%85-%E4%BA%8C/containerd-shim.png">
 
 
 
@@ -428,7 +428,7 @@
 <p>尽管本问题可以通过一些手段规避，但是我们还是需要理解代码中出现的问题。</p>
 <p>containerd-shim的主要事务是执行runc命令，主要功能是托管真正的容器进程，并暴露一个服务，供外部用户与容器进行交互。</p>
 <p>containerd-shim内部处理逻辑如下图所示：</p>
-<p><img src="containerd-shim" alt="containerd-shim简单架构"></p>
+<p><img src="containerd-shim.png" alt="containerd-shim简单架构"></p>
 <p>GRPC服务：containerd-shim的核心服务，对外暴露众多接口，诸如创建/启动task等，并调用runc执行对应的命令。</p>
 <p>此外，containerd-shim内启动了三个协程（包含主协程）共同处理容器内进程退出事件。首先是主协程handleSignals：</p>
 <figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">handleSignals</span><span class="params">(logger *logrus.Entry, signals <span class="keyword">chan</span> os.Signal, server *ttrpc.Server, sv *shim.Service)</span> <span class="title">error</span></span> &#123;</span><br><span class="line">   signals := <span class="built_in">make</span>(<span class="keyword">chan</span> os.Signal, <span class="number">32</span>)</span><br><span class="line">   signal.Notify(signals, unix.SIGTERM, unix.SIGINT, unix.SIGCHLD, unix.SIGPIPE)</span><br><span class="line">   runc.Monitor = reaper.Default</span><br><span class="line">   <span class="comment">// set the shim as the subreaper for all orphaned processes created by the container</span></span><br><span class="line">   <span class="keyword">if</span> err := system.SetSubreaper(<span class="number">1</span>); err != <span class="literal">nil</span> &#123;</span><br><span class="line">      <span class="keyword">return</span> <span class="literal">nil</span>, err</span><br><span class="line">   &#125;</span><br><span class="line">   <span class="keyword">for</span> &#123;</span><br><span class="line">      <span class="keyword">select</span> &#123;</span><br><span class="line">      <span class="keyword">case</span> s := &lt;-signals:</span><br><span class="line">         <span class="keyword">switch</span> s &#123;</span><br><span class="line">         <span class="keyword">case</span> unix.SIGCHLD:</span><br><span class="line">            <span class="keyword">if</span> err := reaper.Reap(); err != <span class="literal">nil</span> &#123;</span><br><span class="line">               logger.WithError(err).Error(<span class="string">&quot;reap exit status&quot;</span>)</span><br><span class="line">            &#125;</span><br><span class="line">         <span class="keyword">case</span> unix.SIGTERM, unix.SIGINT:</span><br><span class="line">            <span class="comment">// shim退出处理</span></span><br><span class="line">         &#125;</span><br><span class="line">      &#125;</span><br><span class="line">   &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
