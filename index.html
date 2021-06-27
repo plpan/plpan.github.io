@@ -265,6 +265,164 @@
   
   
   <div class="post-block">
+    <link itemprop="mainEntityOfPage" href="https://plpan.github.io/pod-terminating-%E6%8E%92%E6%9F%A5%E4%B9%8B%E6%97%85-%E4%BA%8C/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="name" content="">
+      <meta itemprop="description" content="">
+      <meta itemprop="image" content="/images/avatar.gif">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Stupig">
+    </span>
+
+    
+      <header class="post-header">
+
+        
+        
+          <h1 class="post-title" itemprop="name headline">
+                
+                <a class="post-title-link" href="/pod-terminating-%E6%8E%92%E6%9F%A5%E4%B9%8B%E6%97%85-%E4%BA%8C/" itemprop="url">pod terminating 排查之旅(二)</a></h1>
+        
+
+        <div class="post-meta">
+          <span class="post-time">
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">发表于</span>
+              
+              <time title="创建于" itemprop="dateCreated datePublished" datetime="2021-06-24T16:39:23+08:00">
+                2021-06-24
+              </time>
+            
+
+            
+
+            
+          </span>
+
+          
+            <span class="post-category" >
+            
+              <span class="post-meta-divider">|</span>
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">分类于</span>
+              
+              
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/%E9%97%AE%E9%A2%98%E6%8E%92%E6%9F%A5/" itemprop="url" rel="index">
+                    <span itemprop="name">问题排查</span>
+                  </a>
+                </span>
+
+                
+                
+              
+            </span>
+          
+
+          
+            
+          
+
+          
+          
+
+          
+
+          
+
+          
+
+        </div>
+      </header>
+    
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+      
+
+      
+        
+          
+          背景近期，线上报障了多起Pod删除失败的Case，用户的多次删除请求均已失败告终。Pod删除失败的影响主要有二：
+
+面向用户：用户体验下降，且无法对该Pod执行后续的发布流程
+面向弹性云：失败率提升，SLA无法达标
+
+并且，随着弹性云Docker版本升级 (1.13 → 18.06) 进度的推进，线上出现Pod删除失败的Case隐隐有增多的趋势。
+线上问题无小事！不论是从哪个角度出发，我们都应该给线上环境把把脉，看看是哪个系统出了问题。
+问题定位由于线上出Case的频率并不低，基本每周都会出现，这反而给我们定位问题带来了便利^_^。
+排查线上问题的思路一般分如下两个步骤：
+
+定位出现问题的组件
+          ...
+          <!--noindex-->
+          <div class="post-button text-center">
+            <a class="btn" href="/pod-terminating-%E6%8E%92%E6%9F%A5%E4%B9%8B%E6%97%85-%E4%BA%8C/#more" rel="contents">
+              阅读全文 &raquo;
+            </a>
+          </div>
+          <!--/noindex-->
+        
+      
+    </div>
+    
+    
+    
+
+    
+
+    
+
+    
+
+    <footer class="post-footer">
+      
+
+      
+
+      
+
+      
+      
+        <div class="post-eof"></div>
+      
+    </footer>
+  </div>
+  
+  
+  
+  </article>
+
+
+    
+      
+
+  
+
+  
+  
+  
+
+  <article class="post post-type-normal" itemscope itemtype="http://schema.org/Article">
+  
+  
+  
+  <div class="post-block">
     <link itemprop="mainEntityOfPage" href="https://plpan.github.io/docker-exec-%E5%A4%B1%E8%B4%A5%E9%97%AE%E9%A2%98%E6%8E%92%E6%9F%A5%E4%B9%8B%E6%97%85/">
 
     <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
@@ -1531,7 +1689,7 @@ arp反向解析duse-api特殊容器IP时，不返回MAC地址信息
               
                 <a href="/archives">
               
-                  <span class="site-state-item-count">8</span>
+                  <span class="site-state-item-count">9</span>
                   <span class="site-state-item-name">日志</span>
                 </a>
               </div>
@@ -1553,7 +1711,7 @@ arp反向解析duse-api特殊容器IP时，不返回MAC地址信息
               
               <div class="site-state-item site-state-tags">
                 
-                  <span class="site-state-item-count">8</span>
+                  <span class="site-state-item-count">9</span>
                   <span class="site-state-item-name">标签</span>
                 
               </div>
